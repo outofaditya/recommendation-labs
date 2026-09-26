@@ -1,21 +1,28 @@
-# recommendation-labs
+# Recommendation Systems — G12
 
-DSAIT4335 Recommender Systems final project. Hybrid recommenders, evaluation and rerankers on MovieLens 100K with RecBole.
+DSAIT4335 Final Project. Hybrid Recommenders with Evaluation and Re-Rankers on MovieLens 100K using RecBole.
 
-## Setup
-Requires [uv](https://docs.astral.sh/uv/).
+```
+.github/
+  workflows/       CI Branch and Commit Checks
+.venv/             Local Environment · Ignored
+data/
+  ml-100k/         MovieLens 100K Atomic Files
+docs/              Contributing · Submission Checklist
+notebooks/         Exploration Only
+parameters/        RecBole Model Configurations
+report/            LaTeX Report · Overleaf
+results/           Generated Outputs · Ignored
+scripts/           Runnable Entry Points per Task
+source/
+  analysis/        Coefficient and Group Analysis
+  hybrids/         Task 1 Hybrid Recommenders
+  metrics/         Task 2 Accuracy and Beyond-Accuracy Metrics
+  reranking/       Task 3 Re-Rankers
+```
 
+## Simulate
 ```bash
 uv sync
-```
-
-## Run
-Each task has its entry points in `scripts/`.
-
-```bash
 uv run python scripts/<script>.py
 ```
-
-## Team
-- [Contributing](docs/CONTRIBUTING.md)
-- [Submission Checklist](docs/SUBMISSION.md)
