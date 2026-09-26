@@ -1,5 +1,8 @@
 # Contributing
 
+## Hooks
+`uv run pre-commit install` once per clone. Ruff formats and lints on every commit. When it changes files stage them and commit again.
+
 ## Scopes
 | Scope | Covers |
 | --- | --- |
@@ -17,6 +20,6 @@ Conventional Commits with a required scope eg. `feat(t1.3): learn hybrid weights
 Types: `feat` `fix` `docs` `refactor` `test` `chore`.
 
 ## Pull Requests
-- CI checks the branch name and every commit message.
+- CI checks the branch name · commit messages · lock file · lint · a one epoch smoke run.
 - One approval. Merge commits only so every author keeps their history on `main`.
 - Sync with `git merge main`. Never rebase a pushed branch.

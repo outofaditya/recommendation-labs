@@ -1,0 +1,33 @@
+name: quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: one epoch bpr on ml-100k
+        run: |
+          uv run python -c "
+          from recbole.quick_start import run_recbole
+          run_recbole(model='BPR', dataset='ml-100k', config_dict={'epochs': 1, 'data_path': 'data/', 'show_progress': False})
+          "

@@ -4,7 +4,7 @@ DSAIT4335 Final Project. Hybrid Recommenders with Evaluation and Re-Rankers on M
 
 ```
 .github/
-  workflows/       CI Branch and Commit Checks
+  workflows/       CI Conventions · Lint · Smoke Run
 .venv/             Local Environment · Ignored
 data/
   ml-100k/         MovieLens 100K Atomic Files
