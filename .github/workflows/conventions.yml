@@ -1,0 +1,36 @@
+name: conventions
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  conventions:
+    runs-on: ubuntu-latest
+    env:
+      SCOPE: (t1\.[1-5]|t2\.[1-6]|t3\.[1-4]|report|setup|docs)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: branch name
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if ! echo "$BRANCH" | grep -Eq "^[a-z]+/${SCOPE}-[a-z0-9-]+$"; then
+            echo "::error::Branch '$BRANCH' must match <name>/<scope>-<topic>. See docs/CONTRIBUTING.md"
+            exit 1
+          fi
+      - name: commit messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bad=0
+          while IFS= read -r msg; do
+            if ! echo "$msg" | grep -Eq "^(feat|fix|docs|refactor|test|chore)\(${SCOPE}\): [a-z0-9].+$"; then
+              echo "::error::Bad commit message: $msg"
+              bad=1
+            fi
+          done < <(git log --no-merges --format=%s "$BASE..$HEAD")
+          exit $bad
