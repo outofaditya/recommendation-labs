@@ -1,0 +1,29 @@
+model: LightGCN
+dataset: ml-100k
+data_path: data/
+seed: 2020
+reproducibility: True
+
+embedding_size: 64
+n_layers: 3
+reg_weight: 1.0e-4
+require_pow: False
+
+epochs: 20
+train_batch_size: 4096
+learner: adam
+learning_rate: 0.001
+eval_step: 10
+stopping_step: 10
+
+eval_args:
+  split:
+    RS: [0.8, 0.1, 0.1]
+  group_by: user
+  order: RO
+  mode: full
+metrics: [Recall, MRR, NDCG, Hit, Precision]
+topk: [10]
+valid_metric: MRR@10
+
+show_progress: True

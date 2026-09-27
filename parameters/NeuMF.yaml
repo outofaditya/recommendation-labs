@@ -1,0 +1,32 @@
+model: NeuMF
+
+dataset: ml-100k
+data_path: data/
+
+mf_embedding_size: 64
+mlp_embedding_size: 64
+mlp_hidden_size: [128,64]
+dropout_prob: 0.1
+mf_train: True
+mlp_train: True
+
+use_pretrain: False
+mf_pretrain_path: ~
+mlp_pretrain_path: ~
+
+epochs: 20
+train_batch_size: 2048
+learner: adam
+learning_rate: 0.001
+eval_step: 10
+stopping_step: 20
+
+eval_args:
+  split:
+    RS: [0.8, 0.1, 0.1]
+  group_by: user
+  order: RO
+  mode: full
+metrics: [Recall, MRR, NDCG, Hit, Precision]
+topk: [10]
+valid_metric: MRR@10

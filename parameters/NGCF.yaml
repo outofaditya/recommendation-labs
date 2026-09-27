@@ -1,0 +1,27 @@
+model: NGCF
+
+dataset: ml-100k
+data_path: data/
+
+embedding_size: 64
+hidden_size_list: [64,64,64]
+node_dropout: 0.0
+message_dropout: 0.1
+reg_weight: 1e-5
+
+epochs: 20
+train_batch_size: 2048
+learner: adam
+learning_rate: 0.001
+eval_step: 10
+stopping_step: 20
+
+eval_args:
+  split:
+    RS: [0.8, 0.1, 0.1]
+  group_by: user
+  order: RO
+  mode: full
+metrics: [Recall, MRR, NDCG, Hit, Precision]
+topk: [10]
+valid_metric: MRR@10
