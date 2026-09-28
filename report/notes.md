@@ -18,6 +18,24 @@ Pop should beat Random by a wide margin because the top 10% of movies hold 42.7%
 
 The course helpers save only the top-K so our exporter saves every user and movie score for the hybrids.
 
+### Results with Course Configs
+
+| Model | NDCG@10 | Recall@10 | MRR@10 | Hit@10 |
+| --- | --- | --- | --- | --- |
+| EASE | 0.3295 | 0.2805 | 0.5277 | 0.8197 |
+| SLIMElastic | 0.3235 | 0.2750 | 0.5231 | 0.8123 |
+| UserKNN | 0.2873 | 0.2442 | 0.4834 | 0.7805 |
+| ItemKNN | 0.2834 | 0.2470 | 0.4623 | 0.7847 |
+| NeuMF | 0.2651 | 0.2245 | 0.4443 | 0.7434 |
+| BPR | 0.2509 | 0.2147 | 0.4307 | 0.7349 |
+| NGCF | 0.1881 | 0.1570 | 0.3216 | 0.6479 |
+| LightGCN | 0.1441 | 0.1283 | 0.2718 | 0.5801 |
+| FISM | 0.1409 | 0.1220 | 0.2669 | 0.5620 |
+| Pop | 0.1034 | 0.0880 | 0.1951 | 0.4698 |
+| Random | 0.0065 | 0.0056 | 0.0145 | 0.0636 |
+
+Test set with the course configs untuned. The linear item models lead as expected. LightGCN falls below NGCF which contradicts our expectation and points to undertraining since every gradient trained model runs only 20 epochs at learning rate 0.001. NeuMF edges out BPR under the same budget. NGCF varies in the third decimal between runs despite the fixed seed. The exporter's pairwise fallback for NeuMF reproduces RecBole's recall exactly.
+
 ### Random
 
 Random scores every movie uniformly without training. RecBole shares one random vector per user batch which we keep as shipped.
