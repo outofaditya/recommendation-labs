@@ -1,0 +1,4 @@
+alpha uniform 0,1
+embedding_size choice [32,64,128,256]
+learning_rate loguniform -9.2103,-4.6052
+reg_weights choice [[1e-6,1e-6],[1e-5,1e-5],[1e-4,1e-4],[1e-3,1e-3],[1e-2,1e-2]]

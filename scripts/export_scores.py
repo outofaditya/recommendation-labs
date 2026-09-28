@@ -60,24 +60,31 @@ def full_scores(model, dataset, device):
     return users, torch.cat(rows)[:, 1:].float().numpy()
 
 
-def export(name, folder="parameters"):
+def load(name, folder="parameters", overrides=None):
     path = Path(folder) / f"{name}.yaml"
-    config = Config(
-        config_file_list=[
-            str(path if path.exists() else Path("parameters") / path.name)
-        ],
-        config_dict={"checkpoint_dir": str(RESULTS / "checkpoints")},
+    path = path if path.exists() else Path("parameters") / path.name
+    checkpoints = {"checkpoint_dir": str(RESULTS / "checkpoints")}
+    return Config(
+        config_file_list=[str(path)], config_dict=checkpoints | (overrides or {})
     )
+
+
+def fit(config, saved=True):
     init_seed(config["seed"], config["reproducibility"])
     dataset = create_dataset(config)
     loaders = data_preparation(config, dataset)
-    train, valid, test = loaders
-    save_split(dataset, loaders)
-
-    model = get_model(config["model"])(config, train.dataset).to(config["device"])
+    init_seed(config["seed"], config["reproducibility"])
+    model = get_model(config["model"])(config, loaders[0].dataset).to(config["device"])
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
-    _, best_valid = trainer.fit(train, valid, show_progress=False)
-    test_result = trainer.evaluate(test, load_best_model=True)
+    _, valid = trainer.fit(loaders[0], loaders[1], saved=saved, show_progress=False)
+    return dataset, loaders, model, trainer, valid, len(trainer.train_loss_dict)
+
+
+def export(name, folder="parameters"):
+    config = load(name, folder)
+    dataset, loaders, model, trainer, best_valid, epochs = fit(config)
+    save_split(dataset, loaders)
+    test_result = trainer.evaluate(loaders[2], load_best_model=True)
 
     users, scores = full_scores(model, dataset, config["device"])
     items = np.arange(1, dataset.item_num)
@@ -90,7 +97,7 @@ def export(name, folder="parameters"):
         items=dataset.id2token(dataset.iid_field, items),
     )
 
-    metrics = {"valid": best_valid, "test": dict(test_result)}
+    metrics = {"epochs": epochs, "valid": best_valid, "test": dict(test_result)}
     folder = RESULTS / "metrics"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{name}.json").write_text(json.dumps(metrics, indent=2))
@@ -100,4 +107,6 @@ def export(name, folder="parameters"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model")
-    export(parser.parse_args().model)
+    parser.add_argument("--folder", default="parameters")
+    args = parser.parse_args()
+    export(args.model, args.folder)

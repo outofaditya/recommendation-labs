@@ -23,6 +23,66 @@ We use the eleven models provided with the course fork spanning five families. R
 | A tuned BPR matches or beats NeuMF | Rendle et al. (2020) |
 | LightGCN beats NGCF | He et al. (2020) |
 
+### 1.1 Individual Models
+
+Each model is trained once with its course configuration at seed 2020 and evaluated on test. These numbers are the reference that tuning must improve on.
+
+| Model | NDCG@10 | Recall@10 | MRR@10 | Hit@10 |
+| --- | --- | --- | --- | --- |
+| Random | — | — | — | — |
+| Pop | — | — | — | — |
+| ItemKNN | — | — | — | — |
+| UserKNN | — | — | — | — |
+| BPR | — | — | — | — |
+| NeuMF | — | — | — | — |
+| FISM | — | — | — | — |
+| LightGCN | — | — | — | — |
+| NGCF | — | — | — | — |
+| EASE | — | — | — | — |
+| SLIMElastic | — | — | — | — |
+
+### 1.2 Tuning
+
+**Selection.** Every trial trains on train and is scored on validation NDCG@10. NDCG rewards every hit by its rank while MRR credits only the first one so it matches the goal of a good top 10 list. Test is never evaluated during tuning so no test information reaches the chosen settings.
+
+**Training Budget.** The course configurations stop at 20 epochs which cuts the neural models short. Every trial may train up to 500 epochs with validation every 5 epochs and stops after 6 checks without gain. Each trial records the epochs it ran so we can prove that no chosen configuration hit the cap.
+
+**Search Method.** Models with one or two settings are searched exhaustively over a full grid which is cheap and misses nothing inside the grid. Models with four to eight settings use TPE with a fixed budget of 40 to 70 trials since random search beats grids at equal budget (Bergstra and Bengio 2012) and TPE improves on it by learning from earlier trials. TPE is seeded so every search can be rerun exactly. Random and Pop have nothing to tune.
+
+**Search Spaces.** Ranges are set wide in a single pass from each model's paper and RecBole's defaults. They span regularisation · embedding size · learning rate · batch size · negatives per positive and model specific depth or dropout. The full spaces are in Appendix B. A winner on the edge of its range is reported as a limitation.
+
+**Robustness.** Each tuned configuration is retrained with 5 seeds from 2020 to 2024 where every seed draws a new split and a new initialisation. We report test mean ± std and treat a gap smaller than the spread as a tie.
+
+| Model | Method | Trials | Valid NDCG@10 | Epochs | Capped |
+| --- | --- | --- | --- | --- | --- |
+| EASE | Grid | 17 | — | — | — |
+| ItemKNN | Grid | 50 | — | — | — |
+| UserKNN | Grid | 45 | — | — | — |
+| SLIMElastic | Grid | 56 | — | — | — |
+| BPR | TPE | 60 | — | — | — |
+| NeuMF | TPE | 70 | — | — | — |
+| LightGCN | TPE | 50 | — | — | — |
+| NGCF | TPE | 40 | — | — | — |
+| FISM | TPE | 40 | — | — | — |
+
+| Model | Course NDCG@10 | Tuned NDCG@10 | Tuned Recall@10 |
+| --- | --- | --- | --- |
+| Random | — | — | — |
+| Pop | — | — | — |
+| ItemKNN | — | — | — |
+| UserKNN | — | — | — |
+| BPR | — | — | — |
+| NeuMF | — | — | — |
+| FISM | — | — | — |
+| LightGCN | — | — | — |
+| NGCF | — | — | — |
+| EASE | — | — | — |
+| SLIMElastic | — | — | — |
+
+### Observations
+
+To be written from the results against the hypotheses above.
+
 ## Appendix A — Model Descriptions
 
 **Random.** Assigns every movie a uniform random score without training. It is the floor where chance alone hits about 6% of users. RecBole draws one random vector per user batch so users in a batch share a ranking.
@@ -46,3 +106,46 @@ We use the eleven models provided with the course fork spanning five families. R
 **EASE.** Learns one item-item weight matrix $B$ by minimising $\lVert R - RB \rVert^2 + \lambda \lVert B \rVert^2$ with a zero diagonal so no movie predicts itself. The solution is closed form. Strong on small dense catalogues and infeasible for very large ones.
 
 **SLIMElastic.** The same reconstruction objective solved as one elastic net regression per movie with non-negative weights. The L1 term yields a sparse and interpretable weight matrix at the cost of losing negative associations.
+
+## Appendix B — Search Spaces
+
+Log marks a range sampled on a log scale. Every other range is a list of choices or a uniform interval.
+
+| Model | Setting | Space |
+| --- | --- | --- |
+| EASE | `reg_weight` | 1 · 5 · 10 · 25 · 50 · 100 · 200 · 300 · 400 · 500 · 600 · 800 · 1000 · 1500 · 2000 · 3000 · 5000 |
+| ItemKNN | `k` | 10 · 20 · 50 · 100 · 200 · 300 · 400 · 500 · 700 · 1000 |
+| ItemKNN | `shrink` | 0 · 10 · 50 · 100 · 200 |
+| UserKNN | `k` | 10 · 20 · 50 · 100 · 200 · 300 · 400 · 500 · 700 |
+| UserKNN | `shrink` | 0 · 10 · 50 · 100 · 200 |
+| SLIMElastic | `alpha` | 0.001 · 0.005 · 0.01 · 0.05 · 0.1 · 0.2 · 0.5 · 1 |
+| SLIMElastic | `l1_ratio` | 0.0001 · 0.0005 · 0.001 · 0.005 · 0.01 · 0.05 · 0.1 |
+| BPR | `embedding_size` | 32 · 64 · 128 · 256 · 512 · 1024 |
+| BPR | `learning_rate` | 1e-5 to 1e-2 log |
+| BPR | `weight_decay` | 0 · 1e-6 · 1e-5 · 1e-4 · 1e-3 |
+| BPR | `train_batch_size` | 512 · 1024 · 2048 · 4096 |
+| BPR | Negatives | 1 · 2 · 4 |
+| NeuMF | `mf_embedding_size` · `mlp_embedding_size` | 16 · 32 · 64 · 128 |
+| NeuMF | `mlp_hidden_size` | [64,32] · [128,64] · [256,128] · [128,64,32] · [256,128,64] |
+| NeuMF | `dropout_prob` | 0 to 0.7 |
+| NeuMF | `learning_rate` | 1e-5 to 1e-2 log |
+| NeuMF | `weight_decay` | 0 · 1e-6 · 1e-5 · 1e-4 · 1e-3 |
+| NeuMF | `train_batch_size` | 512 · 1024 · 2048 |
+| NeuMF | Negatives | 1 · 2 · 4 |
+| LightGCN | `embedding_size` | 32 · 64 · 128 · 256 |
+| LightGCN | `n_layers` | 1 to 6 |
+| LightGCN | `reg_weight` | 1e-6 to 1e-2 log |
+| LightGCN | `learning_rate` | 1e-4 to 1e-2 log |
+| LightGCN | `train_batch_size` | 1024 · 2048 · 4096 |
+| NGCF | `embedding_size` | 32 · 64 · 128 |
+| NGCF | `hidden_size_list` | [64] · [64,64] · [64,64,64] · [64,64,64,64] · [128,128] · [128,128,128] |
+| NGCF | `message_dropout` | 0 to 0.5 |
+| NGCF | `node_dropout` | 0 · 0.1 · 0.2 |
+| NGCF | `reg_weight` | 1e-6 to 1e-2 log |
+| NGCF | `learning_rate` | 1e-4 to 1e-2 log |
+| FISM | `embedding_size` | 32 · 64 · 128 · 256 |
+| FISM | `alpha` | 0 to 1 |
+| FISM | `reg_weights` | 1e-6 · 1e-5 · 1e-4 · 1e-3 · 1e-2 |
+| FISM | `learning_rate` | 1e-4 to 1e-2 log |
+
+Kept fixed: LightGCN uses one negative as in its paper · SLIMElastic keeps non-negative weights which define SLIM · all evaluation settings.

@@ -1,0 +1,5 @@
+n_layers choice [1,2,3,4,5,6]
+reg_weight loguniform -13.8155,-4.6052
+learning_rate loguniform -9.2103,-4.6052
+embedding_size choice [32,64,128,256]
+train_batch_size choice [1024,2048,4096]
