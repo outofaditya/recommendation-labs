@@ -88,7 +88,8 @@ def export(name, folder="parameters"):
 
     users, scores = full_scores(model, dataset, config["device"])
     items = np.arange(1, dataset.item_num)
-    folder = RESULTS / "scores"
+    out = RESULTS / ("" if folder == "parameters" else "tuned")
+    folder = out / "scores"
     folder.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         folder / f"{name}.npz",
@@ -98,7 +99,7 @@ def export(name, folder="parameters"):
     )
 
     metrics = {"epochs": epochs, "valid": best_valid, "test": dict(test_result)}
-    folder = RESULTS / "metrics"
+    folder = out / "metrics"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{name}.json").write_text(json.dumps(metrics, indent=2))
     print(name, metrics["test"])
