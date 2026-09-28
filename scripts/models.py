@@ -10,6 +10,8 @@ MODELS = [
     "LightGCN",
     "NGCF",
     "EASE",
+    "SLIMElastic",
+    "FISM",
 ]
 
 for name in MODELS:
