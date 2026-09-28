@@ -1,0 +1,17 @@
+# Report Notes
+
+## Setup
+
+We use the course RecBole fork pinned to `439c5a8` with NumPy below 2 and pandas below 3 for compatibility. Ray Tune is added since the fork imports it without declaring it. MovieLens 100K is taken from the course fork as RecBole's download returns 403.
+
+## Split
+
+Each user's interactions are split at random into 80% train, 10% valid and 10% test with seed 2020. The split is identical for every model and the exporter verifies it. Models rank all movies a user has not seen in train.
+
+## Task 1.1 — Individual Models
+
+The course helpers save only the top-K so our exporter saves every user and movie score for the hybrids. `UserKNN` has a course config but no model in the fork.
+
+### Random
+
+Random scores every movie uniformly without training. RecBole shares one random vector per user batch which we keep as shipped.
