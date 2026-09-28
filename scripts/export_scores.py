@@ -37,14 +37,26 @@ def save_split(dataset, loaders):
             frame.to_csv(path, sep="\t", index=False)
 
 
+def batch_scores(model, dataset, batch, device):
+    try:
+        inter = Interaction({dataset.uid_field: batch.to(device)})
+        return model.full_sort_predict(inter).view(len(batch), -1)
+    except NotImplementedError:
+        items = torch.arange(dataset.item_num)
+        inter = Interaction(
+            {
+                dataset.iid_field: items.repeat(len(batch)).to(device),
+                dataset.uid_field: batch.repeat_interleave(len(items)).to(device),
+            }
+        )
+        return model.predict(inter).view(len(batch), -1)
+
+
 @torch.no_grad()
 def full_scores(model, dataset, device):
     model.eval()
     users = torch.arange(1, dataset.user_num)
-    rows = []
-    for batch in users.split(256):
-        inter = Interaction({dataset.uid_field: batch.to(device)})
-        rows.append(model.full_sort_predict(inter).view(len(batch), -1).cpu())
+    rows = [batch_scores(model, dataset, b, device).cpu() for b in users.split(256)]
     return users, torch.cat(rows)[:, 1:].float().numpy()
 
 
