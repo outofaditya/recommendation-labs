@@ -227,3 +227,6 @@ report/*.synctex.gz
 report/*.fdb_latexmk
 report/*.fls
 *.zip
+
+# Local
+backup/
