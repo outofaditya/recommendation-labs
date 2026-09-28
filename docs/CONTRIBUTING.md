@@ -20,6 +20,6 @@ Conventional Commits with a required scope eg. `feat(t1.3): learn hybrid weights
 Types: `feat` `fix` `docs` `refactor` `test` `chore`.
 
 ## Pull Requests
-- CI checks the branch name · commit messages · lock file · lint · a one epoch smoke run.
+- CI checks the branch name · commit messages · lock file · lint · a BPR score export.
 - One approval. Merge commits only so every author keeps their history on `main`.
 - Sync with `git merge main`. Never rebase a pushed branch.

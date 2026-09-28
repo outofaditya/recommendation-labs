@@ -6,7 +6,7 @@ We use the course RecBole fork pinned to `439c5a8` with NumPy below 2 and pandas
 
 ## Split
 
-Each user's interactions are split at random into 80% train, 10% valid and 10% test with seed 2020. The split is identical for every model and the exporter verifies it. Models rank all movies a user has not seen in train.
+Each user's interactions are split at random into 80% train, 10% valid and 10% test with seed 2020. The split is identical for every model and the exporter verifies it. Models rank every movie a user has not interacted with in train or earlier splits.
 
 ## Expectations
 
