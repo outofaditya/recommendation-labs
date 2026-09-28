@@ -1,0 +1,2 @@
+n_layers choice [1,2,3,4]
+learning_rate choice [0.001,0.005,0.01]

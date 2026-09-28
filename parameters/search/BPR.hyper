@@ -1,0 +1,2 @@
+embedding_size choice [32,64,128]
+learning_rate choice [0.0005,0.001,0.005,0.01]
