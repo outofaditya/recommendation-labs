@@ -28,8 +28,21 @@ logging.disable(logging.WARNING)
 
 def tune(name):
     rows = []
+    path = TRIALS / f"{name}.csv"
+    done = pd.read_csv(path).to_dict("records") if path.exists() else []
 
     def objective(config_dict, config_file_list, saved=True):
+        seen = [r for r in done if all(r[k] == v for k, v in config_dict.items())]
+        if seen:
+            valid = {k: v for k, v in seen[0].items() if "@" in k}
+            rows.append(seen[0])
+            return {
+                "model": name,
+                "best_valid_score": valid["ndcg@10"],
+                "valid_score_bigger": True,
+                "best_valid_result": valid,
+                "test_result": {},
+            }
         result = objective_function(config_dict, config_file_list, saved)
         rows.append({**config_dict, **result["best_valid_result"]})
         return result
@@ -47,7 +60,7 @@ def tune(name):
 
     TRIALS.mkdir(parents=True, exist_ok=True)
     trials = pd.DataFrame(rows).sort_values("ndcg@10", ascending=False)
-    trials.to_csv(TRIALS / f"{name}.csv", index=False)
+    trials.to_csv(path, index=False)
 
     TUNED.mkdir(parents=True, exist_ok=True)
     config = yaml.safe_load(base.read_text())

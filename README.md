@@ -31,8 +31,11 @@ Run from the repository root in this order. Every step writes to `results/` and 
 uv sync
 ```
 
-| Step | Command | Outcome |
-| --- | --- | --- |
-| 1.1 Individual Models | `uv run python scripts/models.py` | Full score tables for 11 models in `results/scores/` and test metrics in `results/metrics/` within a few minutes |
-| 1.2 Individual Tuning | `uv run python scripts/tune.py` | Validation scores of every trial in `results/tuning/` and the winning configs in `parameters/tuned/` |
-| 1.2 Tuned Models | `uv run python scripts/models.py --tuned` | Score tables and test metrics of the tuned models replacing those of step 1.1 |
+
+| Step                  | Command                                   | Outcome                                                                                                          |
+| --------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 1.1 Individual Models | `uv run python scripts/models.py`         | Full score tables for 11 models in `results/scores/` and test metrics in `results/metrics/` within a few minutes |
+| 1.2 Individual Tuning | `uv run python scripts/tune.py`           | Validation scores of every trial in `results/tuning/` and the winning configs in `parameters/tuned/`             |
+| 1.2 Tuned Models      | `uv run python scripts/models.py --tuned` | Score tables and test metrics of the tuned models replacing those of step 1.1                                    |
+
+

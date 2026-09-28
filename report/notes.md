@@ -62,19 +62,23 @@ Each model is tuned by exhaustive grid search with RecBole's `HyperTuning` over 
 | Exhaustive grid | Each model has one to three influential settings so a full grid is affordable and misses no combination. |
 | RecBole `HyperTuning` | The course framework's own tuner keeps runs comparable with the fork and exports every trial. Test results it logs are never used for selection. |
 | Up to 300 epochs with early stopping | The course budget of 20 epochs undertrained every gradient model. Validation is checked every 5 epochs and training stops after 5 checks without improvement. |
+| Widen when a winner sits on the edge | A best value at the boundary of its grid may be beaten beyond it. Grids are widened and rerun until every winner is interior or at a natural floor such as zero dropout. Earlier trials are reused. |
 | Settings kept fixed | Embedding sizes other than BPR's and regularisation weights stay at course values to keep grids small and comparisons fair. |
 
 ### Search Spaces
 
+Final grids after widening.
+
 | Model | Settings Searched |
 | --- | --- |
-| ItemKNN and UserKNN | `k` in 10 25 50 100 200 400 and `shrink` in 0 10 50 |
+| ItemKNN | `k` in 10 25 50 100 200 400 600 800 1200 and `shrink` in 0 10 50 |
+| UserKNN | `k` in 10 25 50 100 200 400 and `shrink` in 0 10 50 |
 | EASE | `reg_weight` in 10 50 100 250 500 1000 2000 |
-| SLIMElastic | `alpha` in 0.01 0.05 0.1 0.2 0.5 and `l1_ratio` in 0.001 0.01 0.02 0.1 |
-| BPR | `embedding_size` in 32 64 128 and `learning_rate` in 0.0005 0.001 0.005 0.01 |
-| NeuMF | `dropout_prob` in 0 0.1 0.3 and `learning_rate` in 0.0005 0.001 0.005 |
-| LightGCN | `n_layers` in 1 2 3 4 and `learning_rate` in 0.001 0.005 0.01 |
-| NGCF | `message_dropout` in 0 0.1 0.3 and `learning_rate` in 0.0005 0.001 0.005 |
+| SLIMElastic | `alpha` in 0.01 0.05 0.1 0.2 0.5 and `l1_ratio` in 0.0001 0.0005 0.001 0.01 0.02 0.1 |
+| BPR | `embedding_size` in 32 64 128 256 512 and `learning_rate` in 0.0005 0.001 0.005 0.01 |
+| NeuMF | `dropout_prob` in 0 0.1 0.3 0.5 0.7 and `learning_rate` in 0.0001 0.0002 0.0005 0.001 0.005 |
+| LightGCN | `n_layers` in 1 to 6 and `learning_rate` in 0.001 0.005 0.01 |
+| NGCF | `message_dropout` in 0 0.1 0.3 and `learning_rate` in 0.0001 0.0002 0.0005 0.001 0.005 |
 | FISM | `alpha` in 0 0.5 1 and `learning_rate` in 0.001 0.005 0.01 |
 
 Random and Pop have no settings to tune.
