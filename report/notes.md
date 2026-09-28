@@ -31,3 +31,7 @@ UserKNN runs RecBole's ItemKNN with `knn_method: 'user'`. It computes cosine sim
 ### BPR
 
 BPR is matrix factorization with 64 dimensional user and movie embeddings trained by Bayesian Personalized Ranking. Each step pairs a watched movie with one uniformly sampled unwatched movie and pushes the watched score above it through `−log σ(pos − neg)` with Adam at learning rate 0.001. The course config trains only 20 epochs which is likely too few and a target for tuning.
+
+### NeuMF
+
+NeuMF keeps two 64 dimensional embeddings per user and movie. The GMF branch multiplies them element-wise and the MLP branch concatenates them through layers of 128 and 64 with ReLU and dropout 0.1. Both outputs are concatenated into one score trained pointwise with binary cross-entropy against one sampled negative per positive.
