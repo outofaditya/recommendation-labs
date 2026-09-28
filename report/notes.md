@@ -45,10 +45,10 @@ Pop reaches a 47% hit rate against 6% for Random which reflects the concentrated
 | Hypothesis | Source | Status |
 | --- | --- | --- |
 | Pop beats Random by a wide margin | Concentrated popularity | Confirmed |
-| Linear item models lead on ml-100k | Steck (2019) | Confirmed |
-| NeuMF roughly matches a tuned BPR | Rendle et al. (2020) | Open until tuning |
-| LightGCN beats NGCF | He et al. (2020) | Contradicted untuned |
-| BPR gains the most from tuning | Short training budget | Open until tuning |
+| Linear item models lead on ml-100k | Steck (2019) | Confirmed before and after tuning |
+| NeuMF roughly matches a tuned BPR | Rendle et al. (2020) | Confirmed in spirit as tuned BPR beats NeuMF by 0.035 |
+| LightGCN beats NGCF | He et al. (2020) | Not confirmed as both tie within 0.002 after tuning |
+| BPR gains the most from tuning | Short training budget | Rejected as the graph models gained more |
 
 ## Task 1.2 — Individual Tuning
 
@@ -122,6 +122,32 @@ ItemKNN, SLIMElastic, LightGCN and NGCF settled inside their grids. The wider It
 | FISM | `alpha` 0.5 and `learning_rate` 0.005 | 9 | 0.1238 | Partial normalisation and a faster step |
 
 190 trials in total across three rounds.
+
+### Test Results After Tuning
+
+| Model | Course NDCG@10 | Tuned NDCG@10 | Change | Tuned Recall@10 |
+| --- | --- | --- | --- | --- |
+| EASE | 0.3295 | **0.3302** | +0.0007 | **0.2772** |
+| SLIMElastic | 0.3235 | 0.3240 | +0.0005 | 0.2769 |
+| BPR | 0.2509 | 0.3176 | +0.0667 | 0.2712 |
+| NGCF | 0.1881 | 0.3053 | +0.1172 | 0.2522 |
+| LightGCN | 0.1441 | 0.3031 | +0.1590 | 0.2609 |
+| UserKNN | 0.2873 | 0.2877 | +0.0004 | 0.2524 |
+| NeuMF | 0.2651 | 0.2827 | +0.0176 | 0.2327 |
+| ItemKNN | 0.2834 | 0.2783 | −0.0051 | 0.2370 |
+| FISM | 0.1409 | 0.1415 | +0.0006 | 0.1272 |
+| Pop | 0.1034 | 0.1034 | — | 0.0880 |
+| Random | 0.0065 | 0.0065 | — | 0.0056 |
+
+*Table 2. Test results before and after tuning. Pop and Random have no settings.*
+
+Tuning mattered almost only for gradient trained models and the size of the gain tracks how undertrained each one was. LightGCN gained 0.159 and NGCF 0.117 which lifts both graph models from the bottom of Table 1 into the leading group. BPR gained 0.067 and now beats every neighbourhood model which shows a well trained latent factor model captures more than local co-occurrence. Closed form and counting models barely moved since the course values were already near their optimum.
+
+NeuMF remains 0.035 below BPR after tuning which agrees with Rendle et al. (2020). Its preference for dropout 0.5 and the smallest learning rate shows the MLP overfits ml-100k and must be held back to generalise.
+
+ItemKNN is the one model that lost on test. Its validation optimum at `k` 400 did not transfer and the course value of 100 scores higher on test. With 10% validation per user the ranking between close settings is noisy and we report the validation choice rather than switch based on test.
+
+FISM stays far behind every other personalised model at every setting tried which points to a limitation of the model under this protocol rather than of its tuning.
 
 
 ## Appendix A — Model Descriptions
