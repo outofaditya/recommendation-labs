@@ -35,3 +35,11 @@ BPR is matrix factorization with 64 dimensional user and movie embeddings traine
 ### NeuMF
 
 NeuMF keeps two 64 dimensional embeddings per user and movie. The GMF branch multiplies them element-wise and the MLP branch concatenates them through layers of 128 and 64 with ReLU and dropout 0.1. Both outputs are concatenated into one score trained pointwise with binary cross-entropy against one sampled negative per positive.
+
+### LightGCN
+
+LightGCN treats train as a bipartite graph of users and movies. Starting from 64 dimensional embeddings it runs 3 propagation layers where each node takes the neighbour average weighted by `1/√(deg_u × deg_i)` and averages all layers into the final embedding. Only the layer zero embeddings are learned through BPR loss with L2 weight 1e-4.
+
+### NGCF
+
+NGCF runs the same graph propagation as LightGCN but each of its 3 layers adds learned weights on the neighbour sum and on its element-wise product with the node, then LeakyReLU, message dropout 0.1 and rescaling. Layers are concatenated into 256 dimensions. LightGCN removes this machinery and usually performs better.
