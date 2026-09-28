@@ -1,7 +1,5 @@
 # Recommendation Systems — G12
 
-Working draft of the final report. Each task in the main body is limited to one page and 200 words of discussion. Model descriptions and implementation details sit in the appendix.
-
 ## Experimental Setup
 
 **Data.** MovieLens 100K with 943 users, 1,682 movies and 100,000 ratings. Every user has at least 20 ratings with a median of 65. The matrix is 93.7% empty and popularity is concentrated as the top 10% of movies hold 42.7% of all interactions.
@@ -27,7 +25,7 @@ We use the eleven models provided with the course fork spanning five families. R
 
 ## Appendix A — Model Descriptions
 
-**Random.** Assigns every movie a uniform random score without training. It is the floor where chance alone hits about 6% of users.
+**Random.** Assigns every movie a uniform random score without training. It is the floor where chance alone hits about 6% of users. RecBole draws one random vector per user batch so users in a batch share a ranking.
 
 **Pop.** Scores each movie by its train interaction count divided by the maximum count. Every user receives the same ranking minus their seen movies. It favours mainstream taste and never surfaces the long tail which makes it the extreme case of popularity bias.
 
@@ -48,16 +46,3 @@ We use the eleven models provided with the course fork spanning five families. R
 **EASE.** Learns one item-item weight matrix $B$ by minimising $\lVert R - RB \rVert^2 + \lambda \lVert B \rVert^2$ with a zero diagonal so no movie predicts itself. The solution is closed form. Strong on small dense catalogues and infeasible for very large ones.
 
 **SLIMElastic.** The same reconstruction objective solved as one elastic net regression per movie with non-negative weights. The L1 term yields a sparse and interpretable weight matrix at the cost of losing negative associations.
-
-## Appendix B — Implementation Notes
-
-| Item | Detail |
-| --- | --- |
-| NumPy Below 2 | RecBole uses `np.float_` which NumPy 2 removed |
-| pandas Below 3 | pandas 3 silently ignores RecBole's in-place missing value fill |
-| Ray Tune | The fork imports it without declaring it |
-| hyperopt 0.2.5 | Required by RecBole's tuner and needs setuptools below 81 for `pkg_resources` |
-| Local Dataset | RecBole's download returns 403 so ml-100k comes from the course fork |
-| UserKNN | Provided as an ItemKNN configuration with `knn_method: 'user'` |
-| NeuMF Export | NeuMF lacks full sort prediction so the exporter scores pairwise and reproduces RecBole's recall exactly |
-| Random | RecBole draws one random vector per user batch so users in a batch share a ranking |
