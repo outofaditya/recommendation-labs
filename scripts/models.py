@@ -1,6 +1,6 @@
 from export_scores import export
 
-MODELS = ["Random"]
+MODELS = ["Random", "Pop"]
 
 for name in MODELS:
     export(name)

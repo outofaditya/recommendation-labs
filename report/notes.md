@@ -15,3 +15,7 @@ The course helpers save only the top-K so our exporter saves every user and movi
 ### Random
 
 Random scores every movie uniformly without training. RecBole shares one random vector per user batch which we keep as shipped.
+
+### Pop
+
+Pop counts how often each movie appears in train and divides by the highest count. Star values are ignored. Every user gets the same ranking minus their seen movies which makes it the popularity bias extreme and a stronger baseline than Random.
