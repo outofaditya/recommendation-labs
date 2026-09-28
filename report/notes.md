@@ -19,3 +19,7 @@ Random scores every movie uniformly without training. RecBole shares one random 
 ### Pop
 
 Pop counts how often each movie appears in train and divides by the highest count. Star values are ignored. Every user gets the same ranking minus their seen movies which makes it the popularity bias extreme and a stronger baseline than Random.
+
+### ItemKNN
+
+ItemKNN computes cosine similarity between movies from their train audiences and keeps the 100 nearest per movie. A movie's score is the sum of its similarities to the movies the user watched. No weights are learned and `k` is the main setting to tune.
