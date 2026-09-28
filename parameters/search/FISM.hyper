@@ -1,2 +1,0 @@
-alpha choice [0.0,0.5,1.0]
-learning_rate choice [0.001,0.005,0.01]
