@@ -65,3 +65,9 @@ It is good for users with few ratings since hops borrow signal from neighbours o
 NGCF runs the same graph propagation as LightGCN but each of its 3 layers adds learned weights on the neighbour sum and on its element-wise product with the node, then LeakyReLU, message dropout 0.1 and rescaling. Layers are concatenated into 256 dimensions. LightGCN removes this machinery and usually performs better.
 
 It is good in principle at modelling feature interactions through its product term. It fails in practice because the per layer weights and activations add parameters that overfit and slow training without adding useful signal.
+
+### EASE
+
+EASE learns one movie by movie weight table shared by all users. Each train cell is rebuilt as a weighted sum of the other cells in its row with the diagonal forced to zero so no movie predicts itself. The best weights come from a single least squares formula with an L2 penalty of `reg_weight` 250 so there are no epochs. A user's score for a movie is the sum of its weights over the movies they watched.
+
+It is good on small dense data like ml-100k since weights are learned jointly and shared signal between co-watched movies is not counted twice. It fails on huge catalogues because inverting a movie by movie matrix becomes infeasible and it ignores order and time.
