@@ -29,17 +29,19 @@ Each model is trained once with its course configuration at seed 2020 and evalua
 
 | Model | NDCG@10 | Recall@10 | MRR@10 | Hit@10 |
 | --- | --- | --- | --- | --- |
-| Random | — | — | — | — |
-| Pop | — | — | — | — |
-| ItemKNN | — | — | — | — |
-| UserKNN | — | — | — | — |
-| BPR | — | — | — | — |
-| NeuMF | — | — | — | — |
-| FISM | — | — | — | — |
-| LightGCN | — | — | — | — |
-| NGCF | — | — | — | — |
-| EASE | — | — | — | — |
-| SLIMElastic | — | — | — | — |
+| Random | 0.0065 | 0.0056 | 0.0145 | 0.0636 |
+| Pop | 0.1034 | 0.0880 | 0.1951 | 0.4698 |
+| ItemKNN | 0.2834 | 0.2470 | 0.4623 | 0.7847 |
+| UserKNN | 0.2873 | 0.2442 | 0.4834 | 0.7805 |
+| BPR | 0.2494 | 0.2085 | 0.4304 | 0.7275 |
+| NeuMF | 0.2678 | 0.2271 | 0.4530 | 0.7667 |
+| FISM | 0.1409 | 0.1220 | 0.2669 | 0.5620 |
+| LightGCN | 0.1586 | 0.1388 | 0.2963 | 0.6098 |
+| NGCF | 0.1842 | 0.1545 | 0.3137 | 0.6394 |
+| EASE | 0.3295 | 0.2805 | 0.5277 | 0.8197 |
+| SLIMElastic | 0.3235 | 0.2750 | 0.5231 | 0.8123 |
+
+EASE and SLIMElastic lead and both neighbourhood models follow closely. Pop reaches 16 times the NDCG@10 of Random. All five trained models ran into the 20 epoch limit so they are likely undertrained and LightGCN falls below both KNN models. The course configurations may therefore rank the families by training budget rather than by capacity which motivates tuning.
 
 ### 1.2 Tuning
 
@@ -67,17 +69,17 @@ Each model is trained once with its course configuration at seed 2020 and evalua
 
 | Model | Course NDCG@10 | Tuned NDCG@10 | Tuned Recall@10 |
 | --- | --- | --- | --- |
-| Random | — | — | — |
-| Pop | — | — | — |
-| ItemKNN | — | — | — |
-| UserKNN | — | — | — |
-| BPR | — | — | — |
-| NeuMF | — | — | — |
-| FISM | — | — | — |
-| LightGCN | — | — | — |
-| NGCF | — | — | — |
-| EASE | — | — | — |
-| SLIMElastic | — | — | — |
+| Random | 0.0065 | — | — |
+| Pop | 0.1034 | — | — |
+| ItemKNN | 0.2834 | — | — |
+| UserKNN | 0.2873 | — | — |
+| BPR | 0.2494 | — | — |
+| NeuMF | 0.2678 | — | — |
+| FISM | 0.1409 | — | — |
+| LightGCN | 0.1586 | — | — |
+| NGCF | 0.1842 | — | — |
+| EASE | 0.3295 | — | — |
+| SLIMElastic | 0.3235 | — | — |
 
 ### Observations
 
