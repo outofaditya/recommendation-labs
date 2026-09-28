@@ -27,3 +27,7 @@ ItemKNN computes cosine similarity between movies from their train audiences and
 ### UserKNN
 
 UserKNN runs RecBole's ItemKNN with `knn_method: 'user'`. It computes cosine similarity between users from their train histories and keeps the 100 nearest per user. A movie's score is the sum of similarities of the neighbours who watched it.
+
+### BPR
+
+BPR is matrix factorization with 64 dimensional user and movie embeddings trained by Bayesian Personalized Ranking. Each step pairs a watched movie with one uniformly sampled unwatched movie and pushes the watched score above it through `−log σ(pos − neg)` with Adam at learning rate 0.001. The course config trains only 20 epochs which is likely too few and a target for tuning.
