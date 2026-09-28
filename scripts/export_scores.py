@@ -48,11 +48,7 @@ def full_scores(model, dataset, device):
     return users, torch.cat(rows)[:, 1:].float().numpy()
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("model")
-    name = parser.parse_args().model
-
+def export(name):
     config = Config(
         model=name,
         config_file_list=[f"parameters/{name}.yaml"],
@@ -88,4 +84,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("model")
+    export(parser.parse_args().model)
