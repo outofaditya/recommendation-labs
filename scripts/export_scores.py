@@ -50,7 +50,6 @@ def full_scores(model, dataset, device):
 
 def export(name):
     config = Config(
-        model=name,
         config_file_list=[f"parameters/{name}.yaml"],
         config_dict={"checkpoint_dir": str(RESULTS / "checkpoints")},
     )
@@ -60,8 +59,8 @@ def export(name):
     train, valid, test = loaders
     save_split(dataset, loaders)
 
-    model = get_model(name)(config, train.dataset).to(config["device"])
-    trainer = get_trainer(config["MODEL_TYPE"], name)(config, model)
+    model = get_model(config["model"])(config, train.dataset).to(config["device"])
+    trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)
     _, best_valid = trainer.fit(train, valid, show_progress=False)
     test_result = trainer.evaluate(test, load_best_model=True)
 
