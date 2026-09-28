@@ -27,3 +27,6 @@ dev = [
 [tool.ruff]
 exclude = [".venv"]
 line-length = 150
+
+[tool.ruff.lint]
+ignore = ["I001"]
