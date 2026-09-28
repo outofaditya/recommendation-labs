@@ -1,3 +1,5 @@
+import argparse
+
 from export_scores import export
 
 MODELS = [
@@ -14,5 +16,9 @@ MODELS = [
     "FISM",
 ]
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--tuned", action="store_true")
+folder = "parameters/tuned" if parser.parse_args().tuned else "parameters"
+
 for name in MODELS:
-    export(name)
+    export(name, folder)

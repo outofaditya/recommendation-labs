@@ -11,6 +11,17 @@ from recbole.quick_start import objective_function
 SEARCH = Path("parameters/search")
 TUNED = Path("parameters/tuned")
 TRIALS = Path("results/tuning")
+MODELS = [
+    "EASE",
+    "ItemKNN",
+    "UserKNN",
+    "SLIMElastic",
+    "BPR",
+    "NeuMF",
+    "FISM",
+    "NGCF",
+    "LightGCN",
+]
 warnings.filterwarnings("ignore")
 logging.disable(logging.WARNING)
 
@@ -47,6 +58,6 @@ def tune(name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("models", nargs="+")
+    parser.add_argument("models", nargs="*", default=MODELS)
     for name in parser.parse_args().models:
         tune(name)

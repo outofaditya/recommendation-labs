@@ -60,9 +60,12 @@ def full_scores(model, dataset, device):
     return users, torch.cat(rows)[:, 1:].float().numpy()
 
 
-def export(name):
+def export(name, folder="parameters"):
+    path = Path(folder) / f"{name}.yaml"
     config = Config(
-        config_file_list=[f"parameters/{name}.yaml"],
+        config_file_list=[
+            str(path if path.exists() else Path("parameters") / path.name)
+        ],
         config_dict={"checkpoint_dir": str(RESULTS / "checkpoints")},
     )
     init_seed(config["seed"], config["reproducibility"])
