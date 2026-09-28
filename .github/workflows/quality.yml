@@ -25,9 +25,5 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      - name: one epoch bpr on ml-100k
-        run: |
-          uv run python -c "
-          from recbole.quick_start import run_recbole
-          run_recbole(model='BPR', dataset='ml-100k', config_dict={'epochs': 1, 'data_path': 'data/', 'show_progress': False})
-          "
+      - name: export bpr scores
+        run: uv run python scripts/export_scores.py BPR
