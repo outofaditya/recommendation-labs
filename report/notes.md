@@ -83,6 +83,47 @@ Final grids after widening.
 
 Random and Pop have no settings to tune.
 
+### Tuning Rounds
+
+**Round 1.** The initial grids ran 114 trials. Six of nine winners landed on a grid boundary which signalled the search had not yet bracketed the optimum.
+
+| Model | Round 1 Winner | Valid NDCG@10 | Boundary Hit |
+| --- | --- | --- | --- |
+| SLIMElastic | `alpha` 0.1 and `l1_ratio` 0.001 | 0.2589 | Smallest `l1_ratio` |
+| EASE | `reg_weight` 500 | 0.2568 | None |
+| NGCF | `learning_rate` 0.0005 and `message_dropout` 0 | 0.2486 | Smallest `learning_rate` |
+| LightGCN | `learning_rate` 0.005 and `n_layers` 4 | 0.2433 | Largest `n_layers` |
+| BPR | `embedding_size` 128 and `learning_rate` 0.001 | 0.2411 | Largest `embedding_size` |
+| UserKNN | `k` 50 and `shrink` 0 | 0.2355 | None |
+| NeuMF | `dropout_prob` 0.3 and `learning_rate` 0.0005 | 0.2302 | Largest dropout and smallest `learning_rate` |
+| ItemKNN | `k` 400 and `shrink` 10 | 0.2234 | Largest `k` |
+| FISM | `alpha` 0.5 and `learning_rate` 0.005 | 0.1238 | None |
+
+The longer training budget alone changed the picture. NGCF and LightGCN rose from the bottom half in Task 1.1 to within 0.01 of the linear models on validation which confirms the untuned graph models were undertrained rather than weak. The boundary hits also carry meaning. NeuMF preferring the strongest dropout and smallest step points to overfitting on a dataset of this size and ItemKNN preferring the largest neighbourhood suggests ml-100k is dense enough that more neighbours add signal rather than noise.
+
+**Round 2.** Each boundary dimension was extended beyond its edge while keeping all earlier values so the grid stays exhaustive.
+
+ItemKNN, SLIMElastic, LightGCN and NGCF settled inside their grids. The wider ItemKNN neighbourhoods of 600 to 1200 scored lower which confirms 400 as a true optimum. BPR and NeuMF moved to new boundaries at a lower learning rate so both received a third round.
+
+**Round 3.** NeuMF settled at a learning rate of 0.0001 with 0.00005 scoring lower. BPR reached the new boundary of 1024 dimensions at a learning rate of 0.0001 but the interior runner-up at 512 dimensions and 0.0002 scores 0.2503 against 0.2506. We stop at this plateau since a further round would gain under 0.001 while doubling the model size again.
+
+### Final Configurations
+
+| Model | Winner | Trials | Valid NDCG@10 | Change from Course Config |
+| --- | --- | --- | --- | --- |
+| SLIMElastic | `alpha` 0.1 and `l1_ratio` 0.001 | 30 | 0.2589 | Weaker L1 for a denser table |
+| EASE | `reg_weight` 500 | 7 | 0.2568 | Twice the regularisation |
+| BPR | `embedding_size` 1024 and `learning_rate` 0.0001 | 36 | 0.2506 | Larger and slower with a longer budget |
+| NGCF | `learning_rate` 0.0005 and `message_dropout` 0 | 15 | 0.2486 | Slower with no dropout |
+| LightGCN | `n_layers` 5 and `learning_rate` 0.005 | 18 | 0.2443 | Two more layers and a faster step |
+| UserKNN | `k` 50 and `shrink` 0 | 18 | 0.2355 | Half the neighbourhood |
+| NeuMF | `dropout_prob` 0.5 and `learning_rate` 0.0001 | 30 | 0.2309 | Heavier dropout and a slower step |
+| ItemKNN | `k` 400 and `shrink` 10 | 27 | 0.2234 | Four times the neighbourhood |
+| FISM | `alpha` 0.5 and `learning_rate` 0.005 | 9 | 0.1238 | Partial normalisation and a faster step |
+
+190 trials in total across three rounds.
+
+
 ## Appendix A — Model Descriptions
 
 **Random.** Assigns every movie a uniform random score without training. Serves as the floor where chance alone hits about 6% of users.

@@ -1,2 +1,2 @@
 dropout_prob choice [0.0,0.1,0.3,0.5,0.7]
-learning_rate choice [0.0001,0.0002,0.0005,0.001,0.005]
+learning_rate choice [0.00005,0.0001,0.0002,0.0005,0.001,0.005]
