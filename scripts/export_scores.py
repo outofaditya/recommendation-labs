@@ -1,5 +1,7 @@
 import json
+import logging
 import argparse
+import warnings
 from pathlib import Path
 
 import torch
@@ -11,6 +13,8 @@ from recbole.data import create_dataset, data_preparation
 from recbole.utils import init_seed, get_model, get_trainer
 
 RESULTS = Path("results")
+warnings.filterwarnings("ignore")
+logging.disable(logging.WARNING)
 
 
 def save_split(dataset, loaders):

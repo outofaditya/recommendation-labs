@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "numpy<2",
+    "pandas<3",
     "ray[tune]>=2.58.0",
     "recbole @ git+https://github.com/masoudmansoury/RecBole_DSAIT4335.git@439c5a899296cbaad9842751dd4355393f22d679",
 ]
