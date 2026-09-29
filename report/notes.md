@@ -53,19 +53,23 @@ EASE and SLIMElastic lead and both neighbourhood models follow closely. Pop reac
 
 **Search Spaces.** Ranges are set wide in a single pass from each model's paper and RecBole's defaults. They span regularisation · embedding size · learning rate · batch size · negatives per positive and model specific depth or dropout. The full spaces are in Appendix B. A winner on the edge of its range is reported as a limitation.
 
+**Parallel Search.** Trials run in parallel processes and a free worker starts the next trial at once. Grid points are drawn in the same seeded order as RecBole's own search so every trial and winner is identical at any worker count. With one worker TPE reproduces RecBole's sequential search exactly. With more workers TPE picks a new trial without the results of trials still running which trades a little search efficiency for speed. BPR, NeuMF and LightGCN were tuned with one worker. NGCF was tuned in batches of 4. The thread count per trial is fixed by the worker count since a different thread count changes results in the fourth decimal.
+
 **Robustness.** Each tuned configuration is retrained with 5 seeds from 2020 to 2024 where every seed draws a new split and a new initialisation. We report test mean ± std and treat a gap smaller than the spread as a tie.
 
-| Model | Method | Trials | Valid NDCG@10 | Epochs | Capped |
+| Model | Method | Trials | Valid NDCG@10 | Winner Epochs | Capped Trials |
 | --- | --- | --- | --- | --- | --- |
-| EASE | Grid | 17 | — | — | — |
-| ItemKNN | Grid | 50 | — | — | — |
-| UserKNN | Grid | 45 | — | — | — |
-| SLIMElastic | Grid | 56 | — | — | — |
-| BPR | TPE | 60 | — | — | — |
-| NeuMF | TPE | 70 | — | — | — |
-| LightGCN | TPE | 50 | — | — | — |
-| NGCF | TPE | 40 | — | — | — |
+| EASE | Grid | 17 | 0.2581 | — | — |
+| ItemKNN | Grid | 50 | 0.2234 | — | — |
+| UserKNN | Grid | 45 | 0.2355 | — | — |
+| SLIMElastic | Grid | 56 | 0.2589 | — | — |
+| BPR | TPE | 60 | 0.2535 | 220 | 8 |
+| NeuMF | TPE | 70 | 0.2501 | 170 | 2 |
+| LightGCN | TPE | 50 | 0.2504 | 270 | 5 |
+| NGCF | TPE | 40 | 0.2523 | 220 | 7 |
 | FISM | TPE | 40 | — | — | — |
+
+Grid models train in closed form or in one pass so epochs do not apply. No winner hit the 500 epoch cap.
 
 | Model | Course NDCG@10 | Tuned NDCG@10 | Tuned Recall@10 |
 | --- | --- | --- | --- |
