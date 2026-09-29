@@ -5,14 +5,13 @@ DSAIT4335 Final Project. Hybrid Recommenders with Evaluation and Re-Rankers on M
 ```
 .github/
   workflows/       CI Conventions · Lint · BPR Export
-.venv/             Local Environment · Ignored
 data/
   ml-100k/         MovieLens 100K Atomic Files
 docs/              Contributing · Submission Checklist
 parameters/        RecBole Model Configurations
   search/          Tuning Search Spaces
   tuned/           Tuned Configurations
-report/            LaTeX Report · Overleaf
+report/            Working Notes and LaTeX Report
 results/           Generated Outputs · Ignored
 scripts/           Runnable Entry Points per Task
 source/
@@ -24,17 +23,18 @@ source/
 
 ## Simulate
 
-Run from the repository root in this order. Every step writes to `results/` and uses the same seeded split except the seed repeats which draw a new split per seed.
+Run from the repository root in this order. Every step writes to `results/` and shares one seeded split except seed inference which draws a new split per seed. Steps use all cores by default and `--workers` caps them. RecBole uses a GPU when one is present which matters for FISM and NGCF whose tuning takes hours on CPU.
 
 ```bash
 uv sync
 ```
 
-
-| Step                  | Command                                   | Outcome                                                                                                                                                  |
-| --------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.1 Individual Models | `uv run python scripts/models.py`         | Full score tables for 11 models in `results/scores/` and test metrics in `results/metrics/` within a few minutes                                         |
-| 1.2 Individual Tuning | `uv run python scripts/tune.py`           | Validation scores of every trial in `results/tuning/` and the winning configs in `parameters/tuned/` using all cores or `--workers 1` for an exact rerun |
-| 1.2 Tuned Models      | `uv run python scripts/models.py --tuned` | Score tables and test metrics of the tuned models in `results/tuned/`                                                                                    |
-| 1.2 Seed Repeats      | `uv run python scripts/seeds.py`          | Test metrics of every tuned model for seeds 2020 to 2024 in `results/seeds/` with mean and std in `summary.csv`                                          |
-| 1.2 GPU Pod           | `bash pod.sh`                             | Tunes FISM then runs the tuned models and seed repeats on one GPU with workers sized to its cores and memory                                             |
+| Task                                     | Command                                   | Outcome                                                                                                       |
+| ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Task 1 — Hybrid Recommender**          |                                           |                                                                                                               |
+| 1.1 – Individual Models                  | `uv run python scripts/models.py`         | Score tables in `results/scores/` and test metrics in `results/metrics/` for 11 models in a few minutes       |
+| 1.2 – Individual Tuning                  | `uv run python scripts/tune.py`           | Every trial in `results/tuning/` and the winners in `parameters/tuned/` with `--workers 1` for an exact rerun |
+| 1.2 – Run Tuned Models                   | `uv run python scripts/models.py --tuned` | Score tables and test metrics of the tuned models in `results/tuned/`                                         |
+| 1.2 – Seed Inference                     | `uv run python scripts/seeds.py`          | Test metrics per seed from 2020 to 2024 in `results/seeds/` with mean and std in `summary.csv`                |
+| **Task 2 — Evaluation of Effectiveness** |                                           |                                                                                                               |
+| **Task 3 — Societal Aspects**            |                                           |                                                                                                               |
