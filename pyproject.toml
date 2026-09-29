@@ -23,3 +23,7 @@ dev = [
     "pre-commit>=4.6.2",
     "ruff>=0.16.9",
 ]
+
+[tool.ruff]
+exclude = [".venv"]
+line-length = 150
