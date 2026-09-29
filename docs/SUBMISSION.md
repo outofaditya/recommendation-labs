@@ -3,8 +3,8 @@
 Deadline **October 26 23:59** on Brightspace. Feedback sessions October 7 and 8 ([Queue](https://queue.tudelft.nl/lab/9749)).
 
 ## Task 1 — Hybrid Recommender
-- [ ] 1.1 Individual Models except Content-Based
-- [ ] 1.2 Individual Tuning
+- [x] 1.1 Individual Models except Content-Based
+- [x] 1.2 Individual Tuning
 - [ ] 1.3 Weighted Hybrid with Regression Coefficients
 - [ ] 1.4 Other Hybrids
 - [ ] 1.5 Hybrid Tuning

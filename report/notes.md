@@ -104,7 +104,7 @@ Against the hypotheses:
 
 After tuning the ranking is SLIMElastic and EASE first then BPR · NGCF · LightGCN and NeuMF within 0.01 of each other then UserKNN and FISM then ItemKNN. The gap between the best linear model and the best trained model shrinks from 0.06 in the course runs to 0.015 across seeds.
 
-**Limitations.** Some winners sit on the edge of their range: BPR and LightGCN at the largest batch size · LightGCN and FISM at the largest embedding size · NGCF at the largest embedding size and node dropout · NeuMF at the smallest embeddings. Wider ranges could help these models a little. Trials with very low learning rates sometimes reached the 500 epoch cap but none was a winner. Tuning ran on two machines which can change which setting wins by small margins but not the reported test numbers.
+**Limitations.** Some winners sit on the edge of their range: BPR and LightGCN at the largest batch size · LightGCN and FISM at the largest embedding size · NGCF at the largest embedding size and node dropout · NeuMF at the smallest embeddings. Wider ranges could help these models a little. Trials with very low learning rates sometimes reached the 500 epoch cap but none was a winner. Tuning ran on two machines which can change which setting wins by small margins but not the reported test numbers. SLIMElastic ties at `l1_ratio` 0.001 and 0.0001 on validation NDCG@10 and the earlier trial wins. NGCF is not bit exact on the GPU as two identical runs at seed 2020 scored 0.3201 and 0.3206 while every other model repeated exactly.
 
 ## Appendix A — Model Descriptions
 
