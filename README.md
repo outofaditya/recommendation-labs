@@ -38,3 +38,4 @@ uv sync
 | 1.2 Individual Tuning | `uv run python scripts/tune.py`           | Validation scores of every trial in `results/tuning/` and the winning configs in `parameters/tuned/` using all cores or `--workers 1` for an exact rerun |
 | 1.2 Tuned Models      | `uv run python scripts/models.py --tuned` | Score tables and test metrics of the tuned models in `results/tuned/`                                                                                    |
 | 1.2 Seed Repeats      | `uv run python scripts/seeds.py`          | Test metrics of every tuned model for seeds 2020 to 2024 in `results/seeds/` with mean and std in `summary.csv`                                          |
+| 1.2 GPU Pod           | `bash scripts/pod.sh`                     | Tunes FISM then runs the tuned models and seed repeats on one GPU with workers sized to its cores and memory                                             |
