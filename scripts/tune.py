@@ -2,12 +2,18 @@ import os
 import time
 import argparse
 from pathlib import Path
+from multiprocessing import get_context
+from concurrent.futures import ProcessPoolExecutor
 
 import yaml
+import torch
+import numpy as np
 import pandas as pd
 from export_scores import fit
+from hyperopt.base import Domain
 from recbole.config import Config
 from recbole.trainer import HyperTuning
+from hyperopt import tpe, Trials, STATUS_OK, JOB_STATE_DONE, space_eval
 
 SEARCH = Path("parameters/search")
 TUNED = Path("parameters/tuned")
@@ -32,48 +38,81 @@ def plain(value):
     return value.item() if hasattr(value, "item") else value
 
 
-def tune(name):
-    rows = []
+def trial(files, params, threads=None):
+    if threads:
+        torch.set_num_threads(threads)
+    params = {k: plain(v) for k, v in params.items()}
+    config = Config(config_file_list=files, config_dict=params)
+    start = time.perf_counter()
+    *_, valid, epochs = fit(config, saved=False)
+    seconds = round(time.perf_counter() - start)
+    capped = epochs >= config["epochs"]
+    return params | valid | {"epochs": epochs, "capped": capped, "seconds": seconds}
 
+
+def sequential(name, files, rows):
     def objective(config_dict, config_file_list, saved=False):
-        config_dict = {k: plain(v) for k, v in config_dict.items()}
-        config = Config(config_file_list=config_file_list, config_dict=config_dict)
-        start = time.perf_counter()
-        *_, valid, epochs = fit(config, saved=False)
-        seconds = round(time.perf_counter() - start)
-        capped = epochs >= config["epochs"]
-        rows.append(
-            config_dict
-            | valid
-            | {"epochs": epochs, "capped": capped, "seconds": seconds}
-        )
+        rows.append(trial(config_file_list, config_dict))
         return {
-            "model": config["model"],
-            "best_valid_score": valid["ndcg@10"],
-            "valid_score_bigger": True,
-            "best_valid_result": valid,
+            "model": name,
             "test_result": {},
+            "valid_score_bigger": True,
+            "best_valid_result": rows[-1],
+            "best_valid_score": rows[-1]["ndcg@10"],
         }
 
     algo, evals = PLAN[name]
-    base = Path("parameters") / f"{name}.yaml"
-    common = SEARCH / "common.yaml"
     tuner = HyperTuning(
         objective,
         algo=algo,
         max_evals=evals,
         early_stop=10**6,
+        fixed_config_file_list=files,
         params_file=str(SEARCH / f"{name}.hyper"),
-        fixed_config_file_list=[str(base), str(common)],
     )
     tuner.run()
+
+
+# tpe in synchronous batches so every worker trains at once
+def batched(name, files, rows, workers):
+    space = HyperTuning._build_space_from_file(SEARCH / f"{name}.hyper")
+    trials, rng, evals = Trials(), np.random.RandomState(2020), PLAN[name][1]
+    domain = Domain(lambda params: 0, space)
+    context = get_context("spawn")
+    with ProcessPoolExecutor(workers, mp_context=context) as pool:
+        while len(trials) < evals:
+            docs = []
+            for _ in range(min(workers, evals - len(trials))):
+                seed = rng.randint(2**31 - 1)
+                docs += tpe.suggest(trials.new_trial_ids(1), domain, trials, seed)
+            vals = [{k: v[0] for k, v in d["misc"]["vals"].items() if v} for d in docs]
+            params = [space_eval(space, v) for v in vals]
+            batch = list(pool.map(trial, [files] * len(docs), params, [1] * len(docs)))
+            for doc, row in zip(docs, batch):
+                doc["state"] = JOB_STATE_DONE
+                doc["result"] = {"loss": -row["ndcg@10"], "status": STATUS_OK}
+            trials.insert_trial_docs(docs)
+            trials.refresh()
+            rows += batch
+            print(name, len(trials), max(r["ndcg@10"] for r in rows), flush=True)
+
+
+def tune(name, workers=1):
+    rows = []
+    base, common = Path("parameters") / f"{name}.yaml", SEARCH / "common.yaml"
+    files = [str(base), str(common)]
+    if workers > 1 and PLAN[name][0] == "bayes":
+        batched(name, files, rows, workers)
+    else:
+        sequential(name, files, rows)
 
     TRIALS.mkdir(parents=True, exist_ok=True)
     trials = pd.DataFrame(rows).sort_values("ndcg@10", ascending=False)
     trials.to_csv(TRIALS / f"{name}.csv", index=False)
 
     TUNED.mkdir(parents=True, exist_ok=True)
-    best = {k: plain(v) for k, v in tuner.best_params.items()}
+    keys = [line.split()[0] for line in (SEARCH / f"{name}.hyper").open()]
+    best = {k: rows[trials.index[0]][k] for k in keys}
     config = (
         yaml.safe_load(base.read_text()) | yaml.safe_load(common.read_text()) | best
     )
@@ -89,6 +128,8 @@ def tune(name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("models", nargs="*", default=list(PLAN))
-    for name in parser.parse_args().models:
-        tune(name)
+    args = parser.parse_args()
+    for name in args.models:
+        tune(name, args.workers)

@@ -1,0 +1,37 @@
+model: BPR
+dataset: ml-100k
+data_path: data/
+embedding_size: 512
+train_neg_sample_args:
+  distribution: uniform
+  sample_num: 1
+  alpha: 1.0
+  dynamic: false
+  candidate_num: 0
+epochs: 500
+train_batch_size: 4096
+learner: adam
+learning_rate: 0.00037186406737793864
+eval_step: 5
+stopping_step: 6
+eval_args:
+  split:
+    RS:
+    - 0.8
+    - 0.1
+    - 0.1
+  group_by: user
+  order: RO
+  mode: full
+metrics:
+- Recall
+- MRR
+- NDCG
+- Hit
+- Precision
+topk:
+- 10
+valid_metric: NDCG@10
+show_progress: false
+checkpoint_dir: results/checkpoints
+weight_decay: 1.0e-05
