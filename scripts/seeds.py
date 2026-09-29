@@ -1,3 +1,4 @@
+import os
 import argparse
 from pathlib import Path
 from multiprocessing import get_context
@@ -34,7 +35,7 @@ def repeat(name, seed):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--workers", type=int, default=os.cpu_count())
     parser.add_argument("models", nargs="*", default=MODELS)
     args = parser.parse_args()
     jobs = [(name, seed) for name in args.models for seed in SEEDS]

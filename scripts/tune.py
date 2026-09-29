@@ -1,9 +1,10 @@
+import os
 import time
 import argparse
 from pathlib import Path
 from functools import partial
 from multiprocessing import get_context
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 
 import yaml
 import torch
@@ -49,45 +50,47 @@ def trial(files, params, threads):
     return params | valid | {"epochs": epochs, "capped": capped, "seconds": seconds}
 
 
-# grids queue every point before training while tpe learns after each batch
-def search(name, files, rows, workers):
+# a free worker takes the next point at once and tpe learns from every finished trial
+def search(name, files, workers):
     space = HyperTuning._build_space_from_file(SEARCH / f"{name}.hyper")
     algo, evals = PLAN[name]
     grid = algo == "exhaustive"
     suggest = partial(exhaustive_search, nbMaxSucessiveFailures=1000)
     suggest, evals = (suggest, _spacesize(space)) if grid else (tpe.suggest, evals)
-    threads = max(1, torch.get_num_threads() // workers)
     trials, rng = Trials(), np.random.RandomState(2020)
     domain = Domain(lambda params: 0, space)
-    context = get_context("spawn")
-    with ProcessPoolExecutor(workers, mp_context=context) as pool:
-        while len(trials) < evals:
-            docs = []
-            for _ in range(min(workers, evals - len(trials))):
+    threads = max(1, torch.get_num_threads() // workers)
+    rows, running = {}, {}
+    with ProcessPoolExecutor(workers, mp_context=get_context("spawn")) as pool:
+        while len(rows) < evals:
+            for _ in range(min(workers, evals - len(rows)) - len(running)):
                 seed = rng.randint(2**31 - 1)
-                docs += suggest(trials.new_trial_ids(1), domain, trials, seed)
+                [doc] = suggest(trials.new_trial_ids(1), domain, trials, seed)
+                # grids see pending points so no point is drawn twice
                 if grid:
-                    trials.insert_trial_docs(docs[-1:])
+                    trials.insert_trial_docs([doc])
                     trials.refresh()
-            vals = [{k: v[0] for k, v in d["misc"]["vals"].items() if v} for d in docs]
-            params = [space_eval(space, v) for v in vals]
-            jobs = [files] * len(docs), params, [threads] * len(docs)
-            batch = list(pool.map(trial, *jobs))
-            for doc, row in zip(docs, batch):
+                vals = {k: v[0] for k, v in doc["misc"]["vals"].items() if v}
+                job = pool.submit(trial, files, space_eval(space, vals), threads)
+                running[job] = doc
+            done, _ = wait(running, return_when=FIRST_COMPLETED)
+            for job in sorted(done, key=lambda job: running[job]["tid"]):
+                doc = running.pop(job)
+                row = rows[doc["tid"]] = job.result()
                 doc["state"] = JOB_STATE_DONE
                 doc["result"] = {"loss": -row["ndcg@10"], "status": STATUS_OK}
-            if not grid:
-                trials.insert_trial_docs(docs)
-                trials.refresh()
-            rows += batch
-            print(name, len(rows), max(r["ndcg@10"] for r in rows), flush=True)
+                if not grid:
+                    trials.insert_trial_docs([doc])
+                    trials.refresh()
+            best = max(row["ndcg@10"] for row in rows.values())
+            print(name, len(rows), best, flush=True)
+    return [rows[tid] for tid in sorted(rows)]
 
 
-def tune(name, workers=1):
-    rows = []
+def tune(name, workers):
     base, common = Path("parameters") / f"{name}.yaml", SEARCH / "common.yaml"
     files = [str(base), str(common)]
-    search(name, files, rows, workers)
+    rows = search(name, files, workers)
 
     TRIALS.mkdir(parents=True, exist_ok=True)
     trials = pd.DataFrame(rows).sort_values("ndcg@10", ascending=False, kind="stable")
@@ -111,7 +114,7 @@ def tune(name, workers=1):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--workers", type=int, default=os.cpu_count())
     parser.add_argument("models", nargs="*", default=list(PLAN))
     args = parser.parse_args()
     for name in args.models:
