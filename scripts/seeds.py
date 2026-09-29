@@ -6,22 +6,9 @@ from concurrent.futures import ProcessPoolExecutor
 
 import torch
 import pandas as pd
-from export_scores import fit, load
+from export_scores import MODELS, fit, load
 
 SEEDS = [2020, 2021, 2022, 2023, 2024]
-MODELS = [
-    "Random",
-    "Pop",
-    "ItemKNN",
-    "UserKNN",
-    "BPR",
-    "NeuMF",
-    "LightGCN",
-    "NGCF",
-    "EASE",
-    "SLIMElastic",
-    "FISM",
-]
 FOLDER = Path("results/seeds")
 
 
@@ -39,7 +26,6 @@ if __name__ == "__main__":
     parser.add_argument("models", nargs="*", default=MODELS)
     args = parser.parse_args()
     jobs = [(name, seed) for name in args.models for seed in SEEDS]
-    jobs.sort(key=lambda job: job[0] not in ("NGCF", "FISM", "LightGCN"))
     with ProcessPoolExecutor(args.workers, mp_context=get_context("spawn")) as pool:
         frame = pd.DataFrame(pool.map(repeat, *zip(*jobs)))
     FOLDER.mkdir(parents=True, exist_ok=True)

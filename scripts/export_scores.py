@@ -12,6 +12,20 @@ from recbole.data.interaction import Interaction
 from recbole.data import create_dataset, data_preparation
 from recbole.utils import init_seed, get_model, get_trainer
 
+# slowest first so pools finish early
+MODELS = [
+    "FISM",
+    "NGCF",
+    "LightGCN",
+    "BPR",
+    "NeuMF",
+    "SLIMElastic",
+    "ItemKNN",
+    "UserKNN",
+    "EASE",
+    "Pop",
+    "Random",
+]
 RESULTS = Path("results")
 warnings.filterwarnings("ignore")
 logging.disable(logging.WARNING)
@@ -80,15 +94,15 @@ def fit(config, saved=True):
     return dataset, loaders, model, trainer, valid, len(trainer.train_loss_dict)
 
 
-def export(name, folder="parameters"):
-    config = load(name, folder)
+def export(name, tuned=False):
+    config = load(name, "parameters/tuned" if tuned else "parameters")
     dataset, loaders, model, trainer, best_valid, epochs = fit(config)
     save_split(dataset, loaders)
     test_result = trainer.evaluate(loaders[2], load_best_model=True)
 
     users, scores = full_scores(model, dataset, config["device"])
     items = np.arange(1, dataset.item_num)
-    out = RESULTS / ("" if folder == "parameters" else "tuned")
+    out = RESULTS / ("tuned" if tuned else "")
     folder = out / "scores"
     folder.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
@@ -108,6 +122,4 @@ def export(name, folder="parameters"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model")
-    parser.add_argument("--folder", default="parameters")
-    args = parser.parse_args()
-    export(args.model, args.folder)
+    export(parser.parse_args().model)

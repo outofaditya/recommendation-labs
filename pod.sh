@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tunes fism then runs every tuned model and its seed repeats on a gpu pod
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 export PATH="$HOME/.local/bin:$PATH" OMP_NUM_THREADS=1
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync --no-dev
@@ -17,5 +17,5 @@ workers=$((cpus < memory / 4096 ? cpus : memory / 4096))
 echo "workers $workers"
 
 uv run python scripts/tune.py --workers "$workers" FISM
-uv run python scripts/models.py --tuned
+uv run python scripts/models.py --tuned --workers "$workers"
 uv run python scripts/seeds.py --workers "$workers"
