@@ -53,7 +53,9 @@ EASE and SLIMElastic lead and both neighbourhood models follow closely. Pop reac
 
 **Search Spaces.** Ranges are set wide in a single pass from each model's paper and RecBole's defaults. They span regularisation · embedding size · learning rate · batch size · negatives per positive and model specific depth or dropout. The full spaces are in Appendix B. A winner on the edge of its range is reported as a limitation.
 
-**Parallel Search.** Trials run in parallel processes and a free worker starts the next trial at once. Grid points are drawn in the same seeded order as RecBole's own search so every trial and winner is identical at any worker count. With one worker TPE reproduces RecBole's sequential search exactly. With more workers TPE picks a new trial without the results of trials still running which trades a little search efficiency for speed. BPR, NeuMF and LightGCN were tuned with one worker. NGCF was tuned in batches of 4. The thread count per trial is fixed by the worker count since a different thread count changes results in the fourth decimal.
+**Parallel Search.** Trials run in parallel processes and a free worker starts the next trial at once. Grid points are drawn in the same seeded order as RecBole's own search so every trial and winner is identical at any worker count. With one worker TPE reproduces RecBole's sequential search exactly. With more workers TPE picks a new trial without the results of trials still running which trades a little search efficiency for speed. BPR, NeuMF and LightGCN were tuned with one worker. NGCF was tuned in batches of 4. FISM was tuned with 5 workers on one RTX 4090 since RecBole's FISM scores one user at a time and needed hours per trial on CPU. The thread count per trial is fixed by the worker count since a different thread count changes results in the fourth decimal.
+
+**Hardware.** The other eight models were tuned on an 8 core laptop CPU. The final runs and seed repeats of all eleven models ran on the same GPU so every reported test number comes from one machine.
 
 **Robustness.** Each tuned configuration is retrained with 5 seeds from 2020 to 2024 where every seed draws a new split and a new initialisation. We report test mean ± std and treat a gap smaller than the spread as a tie.
 
@@ -67,27 +69,42 @@ EASE and SLIMElastic lead and both neighbourhood models follow closely. Pop reac
 | NeuMF | TPE | 70 | 0.2501 | 170 | 2 |
 | LightGCN | TPE | 50 | 0.2504 | 270 | 5 |
 | NGCF | TPE | 40 | 0.2523 | 220 | 7 |
-| FISM | TPE | 40 | — | — | — |
+| FISM | TPE | 40 | 0.2406 | 125 | 3 |
 
 Grid models train in closed form or in one pass so epochs do not apply. No winner hit the 500 epoch cap.
 
-| Model | Course NDCG@10 | Tuned NDCG@10 | Tuned Recall@10 |
-| --- | --- | --- | --- |
-| Random | 0.0065 | — | — |
-| Pop | 0.1034 | — | — |
-| ItemKNN | 0.2834 | — | — |
-| UserKNN | 0.2873 | — | — |
-| BPR | 0.2494 | — | — |
-| NeuMF | 0.2678 | — | — |
-| FISM | 0.1409 | — | — |
-| LightGCN | 0.1586 | — | — |
-| NGCF | 0.1842 | — | — |
-| EASE | 0.3295 | — | — |
-| SLIMElastic | 0.3235 | — | — |
+| Model | Course NDCG@10 | Tuned NDCG@10 | Tuned Recall@10 | 5 Seeds NDCG@10 |
+| --- | --- | --- | --- | --- |
+| Random | 0.0065 | 0.0065 | 0.0056 | 0.0072 ± 0.0013 |
+| Pop | 0.1034 | 0.1032 | 0.0850 | 0.1097 ± 0.0187 |
+| ItemKNN | 0.2834 | 0.2783 | 0.2370 | 0.2773 ± 0.0045 |
+| UserKNN | 0.2873 | 0.2877 | 0.2524 | 0.2844 ± 0.0095 |
+| BPR | 0.2494 | 0.3197 | 0.2683 | 0.3138 ± 0.0064 |
+| NeuMF | 0.2678 | 0.3116 | 0.2637 | 0.3043 ± 0.0056 |
+| FISM | 0.1409 | 0.2875 | 0.2489 | 0.2840 ± 0.0064 |
+| LightGCN | 0.1586 | 0.3146 | 0.2661 | 0.3091 ± 0.0039 |
+| NGCF | 0.1842 | 0.3201 | 0.2745 | 0.3112 ± 0.0058 |
+| EASE | 0.3295 | 0.3309 | 0.2808 | 0.3266 ± 0.0055 |
+| SLIMElastic | 0.3235 | 0.3240 | 0.2769 | 0.3288 ± 0.0066 |
+
+Random and Pop keep their course configurations. Their tuned column is the same configuration rerun on the GPU.
 
 ### Observations
 
-To be written from the results against the hypotheses above.
+Tuning lifts every trained model. The five neural and factor models gain between 0.04 and 0.16 NDCG@10 and LightGCN and FISM double their course scores. This supports the view that the course runs were cut short at 20 epochs. The four grid models barely move since their course settings were already close to the best ones. ItemKNN drops by 0.005 on test which is about one seed spread.
+
+Against the hypotheses:
+
+| Hypothesis | Verdict |
+| --- | --- |
+| Pop beats Random by a wide margin | Holds with 0.110 against 0.007 |
+| Linear item models are strong on ml-100k | Holds as SLIMElastic and EASE lead and tie within their spread |
+| A tuned BPR matches or beats NeuMF | Holds with 0.314 against 0.304 and a gap larger than either spread |
+| LightGCN beats NGCF | Not supported as they tie with NGCF 0.002 ahead |
+
+After tuning the ranking is SLIMElastic and EASE first then BPR · NGCF · LightGCN and NeuMF within 0.01 of each other then UserKNN and FISM then ItemKNN. The gap between the best linear model and the best trained model shrinks from 0.06 in the course runs to 0.015 across seeds.
+
+**Limitations.** Some winners sit on the edge of their range: BPR and LightGCN at the largest batch size · LightGCN and FISM at the largest embedding size · NGCF at the largest embedding size and node dropout · NeuMF at the smallest embeddings. Wider ranges could help these models a little. Trials with very low learning rates sometimes reached the 500 epoch cap but none was a winner. Tuning ran on two machines which can change which setting wins by small margins but not the reported test numbers.
 
 ## Appendix A — Model Descriptions
 

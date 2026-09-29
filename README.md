@@ -25,7 +25,7 @@ source/
 
 ## Simulate
 
-Run from the repository root in this order. Every step writes to `results/` and uses the same seeded split.
+Run from the repository root in this order. Every step writes to `results/` and uses the same seeded split except the seed repeats which draw a new split per seed.
 
 ```bash
 uv sync
