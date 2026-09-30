@@ -169,20 +169,29 @@ Fitting on every movie outside train lost to SLIMElastic even on validation (0.2
 
 ### 1.4 Other Hybrids
 
-Three hybrid designs from Burke (2002) each testing a different idea from 1.3. All use the tuned members and the 1.3 protocol.
+The remaining six designs of Burke (2002) on the tuned members and the 1.3 protocol. The first three combine finished score tables. The last three reach inside a model or bring in genres and demographics that no member has seen.
 
 **Method.**
 - **Switching.** Users fall into three equal groups by train size. Each group uses the member with the best validation NDCG@10 in that group so it tests whether families win for different users.
 - **Mixed.** Every member's ranking is fused by reciprocal rank fusion with k = 60 (Cormack et al. 2009). It learns nothing so it shows what the 1.3 weights add.
 - **Cascade.** EASE proposes its top 50 and NeuMF reorders them. The two carry the largest 1.3 weights and come from different families.
+- **Feature Combination.** A gradient-boosted classifier on the 1.3 candidates over the 10 member scores plus each movie's genres year and popularity and each user's age gender occupation and activity. It tests whether a learner can find where each member is right.
+- **Feature Augmentation.** EASE's top 10 unseen movies per user join train as pseudo-interactions and UserKNN is refit on the denser matrix. It tests whether the strongest model can fix the sparse overlap that user neighbourhoods depend on.
+- **Meta-Level.** UserKNN takes its neighbours from the cosine of LightGCN's learned user embeddings instead of raw co-ratings. It tests whether graph propagation finds better peers than direct overlap.
+
+**Proof.** Combination with a linear learner and no side features reproduces Weighted exactly at cross-validated 0.2642 and test 0.3378. The shared neighbourhood on raw ratings reproduces tuned UserKNN for all 943 users once RecBole's padding row is kept since it decides ties at the 50th peer. The saved LightGCN embeddings reproduce its score table to 1e-5.
 
 | Model | Test NDCG@10 | Test Recall@10 |
 | --- | --- | --- |
 | Weighted (1.3) | 0.3378 | 0.2879 |
 | Mixed | 0.3316 | 0.2776 |
 | EASE | 0.3309 | 0.2808 |
+| Feature Combination | 0.3305 | 0.2852 |
 | Switching | 0.3239 | 0.2726 |
 | Cascade | 0.3142 | 0.2656 |
+| Meta-Level | 0.3023 | 0.2563 |
+| Feature Augmentation | 0.2981 | 0.2540 |
+| UserKNN | 0.2877 | 0.2524 |
 
 | Train Movies | Switching Member |
 | --- | --- |
@@ -195,12 +204,15 @@ Three hybrid designs from Burke (2002) each testing a different idea from 1.3. A
 - **Switching still trails EASE.** Each group picks from about 314 users so a small validation edge does not carry to test.
 - **Equal votes tie the best member.** Fusion counts weak members such as Pop and the neighbourhood models as much as strong ones. The 1.3 weights add about 0.006 on top by muting them.
 - **The last stage sets the order.** The cascade shortlist holds half of all test movies but NeuMF orders it worse than EASE does so the result lands beside NeuMF alone.
-- **Only learned weights clearly win.** Choosing one member per user or per stage throws away the others while weighting keeps every signal in proportion.
+- **Side data is already inside the members.** Genres and demographics lift a linear learner by only 0.001 in cross-validation from 0.2642 to 0.2654. The default booster reaches 0.3508 in-sample but 0.2520 in cross-validation so its non-linearity overfits more than the side data gives.
+- **Densifying helps the users who need it least.** Augmentation lifts UserKNN by 0.010 but its lightest third falls from 0.2450 to 0.2356 while the middle and heaviest thirds gain 0.015 and 0.025. Ten pseudo-interactions are up to 38% of a light user's profile. The hypothesis fails.
+- **Learned peers beat co-rated peers but not their source.** Meta-Level lifts UserKNN by 0.015 with the heaviest third gaining 0.037 and the lightest none. It still trails LightGCN at 0.3146 so the embeddings rank better directly than as a similarity.
+- **Only linear weights clearly win.** Choosing one member per user or per stage throws away the others while weighting keeps every signal in proportion.
 
 *Figure: validation NDCG@10 of every member per train size group from `results/tuned/scores/*.npz` with `results/split/{train,valid}.tsv` · shows the winner shifting from LightGCN to the item-item models.*
 
 **Limitations.**
-- Groups and stages are fixed by hand. Their number · the shortlist depth and the fusion constant are settings for 1.5.
+- Groups and stages and the booster and the pseudo count are fixed by hand as settings for 1.5.
 
 ### 1.5 Hybrid Tuning
 
