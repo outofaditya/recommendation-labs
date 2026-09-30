@@ -214,6 +214,73 @@ Every setting is chosen on validation and each tuned hybrid is scored on test on
 
 **Proof.** Each 1.3 and 1.4 default sits inside its grid and must reproduce its recorded numbers before any tuned number is trusted.
 
+**Weighted.** At depth 100 the cross-validation reproduces the 1.3 scores exactly. Tuning keeps the default of depth 100 at C = 0.0001 so test stays at 0.3378.
+
+| Depth | Best C | Cross-Validated NDCG@10 |
+| --- | --- | --- |
+| 25 | 0.0001 | 0.2639 |
+| 50 | 0.0001 | 0.2639 |
+| 100 | 0.0001 | 0.2642 |
+| 200 | 0.00001 | 0.2635 |
+
+Depth moves the score by under 0.001 while C moves it by 0.014 so the shrinkage matters and the candidate count does not.
+
+**Switching.** Four groups win cross-validation and pick LightGCN for users with 16 to 27 train movies and SLIMElastic above. Test falls to 0.3209 against 0.3239 for the default of three.
+
+| Groups | Cross-Validated NDCG@10 |
+| --- | --- |
+| 1 | 0.2545 |
+| 2 | 0.2505 |
+| 3 | 0.2499 |
+| 4 | 0.2572 |
+| 5 | 0.2565 |
+
+The spread between counts is about one fold standard deviation of 0.005 so no count is reliably better. Switching gains nothing over one member once the choice is made on held-out users.
+
+**Mixed.** At k = 60 with all 10 members the test scores reproduce 1.4 exactly. All 10 members win at k = 10 and test rises to 0.3388 against 0.3316 for the default.
+
+| Members | Best k | Validation NDCG@10 |
+| --- | --- | --- |
+| 2 | 1 | 0.2620 |
+| 3 | 1 | 0.2634 |
+| 5 | 1 | 0.2657 |
+| 10 | 10 | 0.2671 |
+
+A small k lets the top ranks dominate so weak members barely vote. This mutes them as the 1.3 weights do and ties Weighted at 0.3378 without learning. The choice is made on plain validation and k = 1 trails k = 10 by only 0.0004.
+
+**Cascade.** EASE to NeuMF at 50 reproduces the 1.4 test scores exactly and sits at 0.2487 on validation. Of 360 settings BPR shortlisting 20 for SLIMElastic wins and test rises to 0.3282 against 0.3142 for the default.
+
+| Stages | Shortlist | Validation NDCG@10 |
+| --- | --- | --- |
+| BPR → SLIMElastic | 20 | 0.2624 |
+| LightGCN → SLIMElastic | 20 | 0.2622 |
+| LightGCN → SLIMElastic | 50 | 0.2599 |
+| SLIMElastic alone | — | 0.2589 |
+| EASE → NeuMF | 50 | 0.2487 |
+
+The strongest member belongs second where it orders a short list that a different model family proposes. The default wasted EASE on shortlisting and let the weaker NeuMF decide. The winner beats SLIMElastic alone by 0.0035 on validation but was picked from 360 settings so part of that gain is selection luck. On test it still trails EASE alone at 0.3309.
+
+**Results.** Test scores of each default against its tuned setting in `results/hybrid/metrics/Tuned*.json`.
+
+| Hybrid | Default NDCG@10 | Tuned NDCG@10 | Tuned Recall@10 | Tuned Setting |
+| --- | --- | --- | --- | --- |
+| Mixed | 0.3316 | 0.3388 | 0.2844 | All 10 Members at k = 10 |
+| Weighted | 0.3378 | 0.3378 | 0.2879 | Depth 100 at C = 0.0001 |
+| Cascade | 0.3142 | 0.3282 | 0.2831 | BPR → SLIMElastic at 20 |
+| Switching | 0.3239 | 0.3209 | 0.2728 | 4 Groups |
+| EASE | — | 0.3309 | 0.2808 | Best Single Model |
+
+**Observations.**
+- **Tuning mostly fixes bad defaults.** Cascade gains 0.014 once the order of its stages flips while Weighted was already at its optimum.
+- **Muting weak members is what pays.** A small fusion constant and strong L2 shrinkage both let the best members decide and land within 0.001 of each other.
+- **Selection by held-out users stops overfitting.** Switching was tuned by cross-validation and fell back toward one member while hybrids tuned on plain validation all rose on test.
+
+*Figure: validation NDCG@10 over the mixed grid from `results/hybrid/metrics/TunedMixed.json` · shows the gain from small k and more members.*
+
+**Limitations.**
+- Mixed and cascade settings are chosen on plain validation so their test gains carry selection luck of up to one seed spread of 0.0055.
+- Every tuned hybrid other than Cascade sits within one seed spread of Weighted.
+
 ## Appendix A — Models
 
 | Model | How It Scores |

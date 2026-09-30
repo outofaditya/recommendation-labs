@@ -12,38 +12,55 @@ def ndcg(scores, hidden, relevant):
     return accuracy(top(scores, hidden), relevant)["ndcg@10"]
 
 
-# each activity group takes its best member on validation
-def switching(x, masks):
+def best(x, masks, users):
+    hidden, relevant = masks["train"][users], masks["valid"][users]
+    runs = [ndcg(x[users, :, j], hidden, relevant) for j in range(len(MEMBERS))]
+    return int(np.argmax(runs))
+
+
+# users split into equal groups by train size
+def groups(masks, count):
     order = np.argsort(masks["train"].sum(axis=1), kind="stable")
+    return np.array_split(order, count)
+
+
+# each activity group takes its best member on validation
+def switching(x, masks, count=GROUPS):
     table, chosen = np.empty(x.shape[:2]), []
-    for group in np.array_split(order, GROUPS):
-        hidden, relevant = masks["train"][group], masks["valid"][group]
-        runs = [ndcg(x[group, :, j], hidden, relevant) for j in range(len(MEMBERS))]
-        best = int(np.argmax(runs))
-        table[group] = x[group, :, best]
+    for group in groups(masks, count):
+        member = best(x, masks, group)
+        table[group] = x[group, :, member]
         size = masks["train"][group].sum(axis=1)
-        chosen.append(
-            {"train": [int(size.min()), int(size.max())], "member": MEMBERS[best]}
-        )
+        span = [int(size.min()), int(size.max())]
+        chosen.append({"train": span, "member": MEMBERS[member]})
     return table, {"groups": chosen}
+
+
+# every member's rank of each movie with hidden movies last
+def ranks(x, hidden):
+    masked = np.where(hidden[..., None], -np.inf, x)
+    return np.argsort(np.argsort(-masked, axis=1), axis=1) + 1
 
 
 # reciprocal rank fusion of every member over the unseen movies
 def mixed(x, masks):
     seen = masks["train"] | masks["valid"]
-    masked = np.where(seen[..., None], -np.inf, x)
-    ranks = np.argsort(np.argsort(-masked, axis=1), axis=1) + 1
-    return (1 / (FUSION + ranks)).sum(axis=-1), {"k": FUSION}
+    return (1 / (FUSION + ranks(x, seen))).sum(axis=-1), {"k": FUSION}
 
 
-# the first stage shortlists unseen movies and the second orders them
+# the first stage shortlists unhidden movies and the second orders them
+def shortlisted(first, second, hidden, size):
+    shortlist = np.argsort(np.where(hidden, np.inf, -first), axis=1)[:, :size]
+    table = np.full(first.shape, -np.inf)
+    np.put_along_axis(table, shortlist, np.take_along_axis(second, shortlist, 1), 1)
+    return table
+
+
 def cascade(x, masks):
     seen = masks["train"] | masks["valid"]
     first, second = (x[..., MEMBERS.index(name)] for name in STAGES)
-    shortlist = np.argsort(np.where(seen, np.inf, -first), axis=1)[:, :SHORTLIST]
-    table = np.full(first.shape, -np.inf)
-    np.put_along_axis(table, shortlist, np.take_along_axis(second, shortlist, 1), 1)
-    return table, {"stages": STAGES, "shortlist": SHORTLIST}
+    details = {"stages": STAGES, "shortlist": SHORTLIST}
+    return shortlisted(first, second, seen, SHORTLIST), details
 
 
 if __name__ == "__main__":
