@@ -1,6 +1,6 @@
 # Recommendation Systems — G12
 
-Working notes behind the report. Every choice has its reason and every number comes from `results/`.
+Working notes behind the report. Every choice has its reason and every number is measured from `results/`.
 
 ## Experimental Setup
 
@@ -201,7 +201,7 @@ The remaining six designs of Burke (2002) on the tuned members and the 1.3 proto
 
 **Observations.**
 - **Short histories go to the graph model.** LightGCN wins for the lightest users since propagation borrows signal from similar users when a user's own history is thin. Item-item models win once histories are long enough to match movie to movie so the hypothesis holds.
-- **Switching still trails EASE.** Each group picks from about 314 users so a small validation edge does not carry to test.
+- **Switching still trails EASE.** Each group picks from about 314 users and its validation lead of 0.2614 against 0.2581 turns into 0.3239 against 0.3309 on test.
 - **Equal votes tie the best member.** Fusion counts weak members such as Pop and the neighbourhood models as much as strong ones. The 1.3 weights add about 0.006 on top by muting them.
 - **The last stage sets the order.** The cascade shortlist holds half of all test movies but NeuMF orders it worse than EASE does so the result lands beside NeuMF alone.
 - **Side data is already inside the members.** Genres and demographics lift a linear learner by only 0.001 in cross-validation from 0.2642 to 0.2654. The default booster reaches 0.3508 in-sample but 0.2520 in cross-validation so its non-linearity overfits more than the side data gives.
@@ -229,9 +229,9 @@ Every setting is chosen on validation and each tuned hybrid is scored on test on
 
 **Proof.** Each 1.3 and 1.4 default sits inside its grid and must reproduce its recorded numbers before any tuned number is trusted.
 
-**Weighted.** At depth 100 the cross-validation reproduces the 1.3 scores exactly. Tuning keeps the default of depth 100 at C = 0.0001 so test stays at 0.3378. Depth 25 to 200 moves the best cross-validated score by under 0.001 while C moves it by 0.014 so the shrinkage matters and the candidate count does not.
+**Weighted.** At depth 100 the cross-validation reproduces the 1.3 scores exactly. Tuning keeps the default of depth 100 at C = 0.0001 so test stays at 0.3378. Depth 25 to 200 moves the best cross-validated score by under 0.001 while C moves it by 0.011 to 0.022 so the shrinkage matters and the candidate count does not.
 
-**Switching.** Four groups win cross-validation and pick LightGCN for users with 16 to 27 train movies and SLIMElastic above. Test falls to 0.3209 against 0.3239 for the default of three. One to five groups score 0.2545 and 0.2505 and 0.2499 and 0.2572 and 0.2565 in cross-validation which is within one fold standard deviation of 0.005 so no count is reliably better. Switching gains nothing over one member once the choice is made on held-out users.
+**Switching.** Four groups win cross-validation and pick LightGCN for users with 16 to 27 train movies and SLIMElastic above. Test falls to 0.3209 against 0.3239 for the default of three. One to five groups score 0.2545 and 0.2505 and 0.2499 and 0.2572 and 0.2565 in cross-validation. Four groups beat three on all five folds by 0.007 but beat one group on only three folds by 0.003 so switching gains nothing reliable over the best single member once the choice is made on held-out users.
 
 **Mixed.** At k = 60 with all 10 members the test scores reproduce 1.4 exactly. All 10 members win at k = 10 and test rises to 0.3388 against 0.3316 for the default.
 
@@ -291,7 +291,7 @@ Pseudo-interactions gain 0.017 with 25 peers and nothing with 200 so densifying 
 *Figure: validation NDCG@10 over the mixed grid from `results/hybrid/metrics/TunedMixed.json` · shows the gain from small k and more members.*
 
 **Limitations.**
-- Mixed and Cascade and Augmentation and Meta-Level settings are chosen on plain validation so their test gains carry selection luck of up to one seed spread of 0.0055.
+- Mixed and Cascade and Augmentation and Meta-Level settings are chosen on plain validation so their test gains may include selection luck.
 - Tuned Mixed and Combination sit within one seed spread of Weighted so none of the three is reliably best.
 
 ## Appendix A — Models
