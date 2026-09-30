@@ -4,7 +4,8 @@ from functools import partial
 from multiprocessing import get_context
 from concurrent.futures import ProcessPoolExecutor
 
-from export_scores import MODELS, export
+from export_scores import export
+from source.data import MODELS
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

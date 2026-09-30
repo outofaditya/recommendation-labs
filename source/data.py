@@ -3,6 +3,20 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# slowest first so pools finish early
+MODELS = [
+    "FISM",
+    "NGCF",
+    "LightGCN",
+    "BPR",
+    "NeuMF",
+    "SLIMElastic",
+    "ItemKNN",
+    "UserKNN",
+    "EASE",
+    "Pop",
+    "Random",
+]
 RESULTS = Path("results")
 
 
