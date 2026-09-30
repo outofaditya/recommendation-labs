@@ -1,6 +1,6 @@
 # Recommendation Systems — G12
 
-Working notes behind the report. Every choice has its reason and every number comes from `results/`.
+Working notes behind the report. Every choice has its reason and every number is measured from `results/`.
 
 ## Experimental Setup
 
@@ -201,7 +201,7 @@ The remaining six designs of Burke (2002) on the tuned members and the 1.3 proto
 
 **Observations.**
 - **Short histories go to the graph model.** LightGCN wins for the lightest users since propagation borrows signal from similar users when a user's own history is thin. Item-item models win once histories are long enough to match movie to movie so the hypothesis holds.
-- **Switching still trails EASE.** Each group picks from about 314 users so a small validation edge does not carry to test.
+- **Switching still trails EASE.** Each group picks from about 314 users and its validation lead of 0.2614 against 0.2581 turns into 0.3239 against 0.3309 on test.
 - **Equal votes tie the best member.** Fusion counts weak members such as Pop and the neighbourhood models as much as strong ones. The 1.3 weights add about 0.006 on top by muting them.
 - **The last stage sets the order.** The cascade shortlist holds half of all test movies but NeuMF orders it worse than EASE does so the result lands beside NeuMF alone.
 - **Side data is already inside the members.** Genres and demographics lift a linear learner by only 0.001 in cross-validation from 0.2642 to 0.2654. The default booster reaches 0.3508 in-sample but 0.2520 in cross-validation so its non-linearity overfits more than the side data gives.
