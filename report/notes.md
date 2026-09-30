@@ -22,6 +22,7 @@ We run all eleven models of the course fork across five families. Random and Pop
 | Linear item models are strong on ml-100k | Steck (2019) |
 | A tuned BPR matches or beats NeuMF | Rendle et al. (2020) |
 | LightGCN beats NGCF | He et al. (2020) |
+| A weighted hybrid beats its best member | Models from different families make different errors (Burke 2002) |
 
 ### 1.1 Individual Models
 
@@ -119,6 +120,44 @@ Random and Pop keep their course configurations. Their tuned column is the same 
 - Tuning ran on two machines which can change which setting wins by small margins but not the reported test numbers.
 - SLIMElastic ties at `l1_ratio` 0.001 and 0.0001 on validation NDCG@10 and the earlier trial wins.
 - NGCF is not bit exact as identical runs differ in the fourth decimal on CPU and GPU while every other model repeats its metrics exactly.
+
+### 1.3 Weighted Hybrid
+
+**Idea.** The hybrid score of a user and movie is a weighted sum of the individual models' scores for that pair. Regression learns the weights on validation so the mix that best finds held-out movies wins.
+
+**Members.** The nine tuned models and Pop. Random is left out since its scores carry no signal.
+
+**Scaling.** Each model's scores are standardised per user over that user's candidate movies. Raw scales differ widely between models and only the order within a user matters for ranking.
+
+**Rows.** Each user's candidates are the union of every member's top 100 movies outside train which covers 79% of validation movies in about 215,000 rows. A row holds the ten scaled scores of one candidate and its label is 1 when the movie is in the user's validation set. Candidates are used instead of the whole catalogue since the fit then learns the order near the top of the list which is all NDCG@10 sees. This mirrors the ranking stage of industrial recommenders where retrievers propose candidates and a ranker orders them.
+
+**Regression.** Logistic regression with L2 regularisation. It fits the 0 or 1 label directly and each weight reads as how much a model's score moves the odds of a hit. L2 keeps the weights of near-duplicate models such as EASE and SLIMElastic stable instead of trading them off. Its strength is chosen by cross-validation.
+
+**Test.** The weights are frozen. For each user the train and validation movies are hidden · the candidates are rebuilt from the remaining movies and ordered by the weighted sum and the top 10 is evaluated on test exactly as for the single models.
+
+**Metrics.** The hybrid is not a RecBole model so its metrics come from our own module. It reproduces RecBole's test metrics exactly for the nine tuned models on both course and tuned runs. Random draws fresh scores at every call so its exported table is a different draw. Pop ties at rank 10 for 822 of 943 users so its top 10 depends on tie order and our ranking breaks ties by movie order to stay deterministic. RecBole's Pop also counts the sampled training negatives so its ranking matches true popularity at a rank correlation of only 0.90 which matters for the baseline comparison in 2.2.
+
+**Stability.** Five-fold cross-validation over users fits the weights on 80% of users and scores the rest in turn. The spread of each weight across folds shows how stable its contribution is for 2.3 and the held-out score picks the L2 strength. The final weights use all validation users.
+
+**Development.** Choices below were made on validation only.
+- Fitting on every movie outside train lost to SLIMElastic even on validation with 0.2509 against 0.2589. The fit spent its effort separating hits from obvious misses deep in the tail which motivated the candidate rows.
+- On candidates the L2 strength drives the ranking. Weak regularisation fits the 0 or 1 labels well but ranks poorly as correlated members cancel out with LightGCN at −0.90 against NGCF at 0.55. Strong regularisation pulls the weights toward a balanced mix that ranks better than any member.
+
+| L2 Strength C | Validation NDCG@10 |
+| --- | --- |
+| 100 | 0.2511 |
+| 1 | 0.2511 |
+| 0.01 | 0.2529 |
+| 0.0001 | 0.2640 |
+| SLIMElastic alone | 0.2589 |
+
+These values are in-sample so C is chosen by five-fold user cross-validation before test is used for the final number.
+
+*Insert figure: validation NDCG@10 against C for the hybrid with the best member as a line · shows ranking quality rising as the weights shrink toward a balanced mix.*
+
+**Limitations.**
+- The members were tuned on the same validation set so their validation scores are slightly optimistic. At worst the weights end up a little off which lowers the test score and never inflates it since test stays unseen. Stacking with out-of-fold retraining of every member would remove this at a cost of hours for a small effect.
+- The hybrid uses the seed 2020 split only since score tables exist for that split alone.
 
 ## Appendix A — Model Descriptions
 
