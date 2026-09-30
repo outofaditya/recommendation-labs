@@ -229,28 +229,9 @@ Every setting is chosen on validation and each tuned hybrid is scored on test on
 
 **Proof.** Each 1.3 and 1.4 default sits inside its grid and must reproduce its recorded numbers before any tuned number is trusted.
 
-**Weighted.** At depth 100 the cross-validation reproduces the 1.3 scores exactly. Tuning keeps the default of depth 100 at C = 0.0001 so test stays at 0.3378.
+**Weighted.** At depth 100 the cross-validation reproduces the 1.3 scores exactly. Tuning keeps the default of depth 100 at C = 0.0001 so test stays at 0.3378. Depth 25 to 200 moves the best cross-validated score by under 0.001 while C moves it by 0.014 so the shrinkage matters and the candidate count does not.
 
-| Depth | Best C | Cross-Validated NDCG@10 |
-| --- | --- | --- |
-| 25 | 0.0001 | 0.2639 |
-| 50 | 0.0001 | 0.2639 |
-| 100 | 0.0001 | 0.2642 |
-| 200 | 0.00001 | 0.2635 |
-
-Depth moves the score by under 0.001 while C moves it by 0.014 so the shrinkage matters and the candidate count does not.
-
-**Switching.** Four groups win cross-validation and pick LightGCN for users with 16 to 27 train movies and SLIMElastic above. Test falls to 0.3209 against 0.3239 for the default of three.
-
-| Groups | Cross-Validated NDCG@10 |
-| --- | --- |
-| 1 | 0.2545 |
-| 2 | 0.2505 |
-| 3 | 0.2499 |
-| 4 | 0.2572 |
-| 5 | 0.2565 |
-
-The spread between counts is about one fold standard deviation of 0.005 so no count is reliably better. Switching gains nothing over one member once the choice is made on held-out users.
+**Switching.** Four groups win cross-validation and pick LightGCN for users with 16 to 27 train movies and SLIMElastic above. Test falls to 0.3209 against 0.3239 for the default of three. One to five groups score 0.2545 and 0.2505 and 0.2499 and 0.2572 and 0.2565 in cross-validation which is within one fold standard deviation of 0.005 so no count is reliably better. Switching gains nothing over one member once the choice is made on held-out users.
 
 **Mixed.** At k = 60 with all 10 members the test scores reproduce 1.4 exactly. All 10 members win at k = 10 and test rises to 0.3388 against 0.3316 for the default.
 
@@ -261,7 +242,7 @@ The spread between counts is about one fold standard deviation of 0.005 so no co
 | 5 | 1 | 0.2657 |
 | 10 | 10 | 0.2671 |
 
-A small k lets the top ranks dominate so weak members barely vote. This mutes them as the 1.3 weights do and ties Weighted at 0.3378 without learning. The choice is made on plain validation and k = 1 trails k = 10 by only 0.0004.
+A small k lets the top ranks dominate so weak members barely vote. This mutes them as the 1.3 weights do and matches Weighted within 0.001 without learning. The choice is made on plain validation and k = 1 trails k = 10 by only 0.0004.
 
 **Cascade.** EASE to NeuMF at 50 reproduces the 1.4 test scores exactly and sits at 0.2487 on validation. Of 360 settings BPR shortlisting 20 for SLIMElastic wins and test rises to 0.3282 against 0.3142 for the default.
 
@@ -275,7 +256,7 @@ A small k lets the top ranks dominate so weak members barely vote. This mutes th
 
 The strongest member belongs second where it orders a short list that a different model family proposes. The default wasted EASE on shortlisting and let the weaker NeuMF decide. The winner beats SLIMElastic alone by 0.0035 on validation but was picked from 360 settings so part of that gain is selection luck. On test it still trails EASE alone at 0.3309.
 
-**Feature Combination.** Unlimited depth at rate 0.1 reproduces the 1.4 cross-validation of 0.2520. Depth 2 wins at 0.2635 and test rises to 0.3373 against 0.3305. The best booster is the shallowest and still trails linear Weighted at 0.2642.
+**Feature Combination.** Unlimited depth at rate 0.1 reproduces the 1.4 cross-validation of 0.2520. Depth 2 wins at 0.2635 and test rises to 0.3373 against 0.3305. It stops at the 100 round cap but lifting the cap to 1000 only moves it to 0.2628. The best booster is the shallowest and still trails linear Weighted at 0.2642.
 
 **Feature Augmentation.** No pseudo-interactions at 50 peers reproduces UserKNN at 0.2355 on validation. Five pseudo-interactions with 25 peers win at 0.2426 and test rises to 0.3027 against 0.2981.
 
