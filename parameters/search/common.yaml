@@ -1,0 +1,6 @@
+epochs: 500
+eval_step: 5
+stopping_step: 6
+show_progress: False
+valid_metric: NDCG@10
+checkpoint_dir: results/checkpoints

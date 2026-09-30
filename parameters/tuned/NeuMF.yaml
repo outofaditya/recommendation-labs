@@ -1,0 +1,47 @@
+model: NeuMF
+dataset: ml-100k
+data_path: data/
+mf_embedding_size: 16
+mlp_embedding_size: 16
+mlp_hidden_size:
+- 256
+- 128
+dropout_prob: 0.12468917593255406
+mf_train: true
+mlp_train: true
+use_pretrain: false
+mf_pretrain_path: null
+mlp_pretrain_path: null
+epochs: 500
+train_batch_size: 2048
+learner: adam
+learning_rate: 0.00135242384271819
+eval_step: 5
+stopping_step: 6
+eval_args:
+  split:
+    RS:
+    - 0.8
+    - 0.1
+    - 0.1
+  group_by: user
+  order: RO
+  mode: full
+metrics:
+- Recall
+- MRR
+- NDCG
+- Hit
+- Precision
+topk:
+- 10
+valid_metric: NDCG@10
+show_progress: false
+checkpoint_dir: results/checkpoints
+train_neg_sample_args:
+  distribution: uniform
+  sample_num: 4
+  alpha: 1.0
+  dynamic: false
+  candidate_num: 0
+weight_decay: 1.0e-05

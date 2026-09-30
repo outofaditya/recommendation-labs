@@ -1,0 +1,29 @@
+model: ItemKNN
+dataset: ml-100k
+data_path: data/
+k: 50
+knn_method: user
+eval_args:
+  split:
+    RS:
+    - 0.8
+    - 0.1
+    - 0.1
+  group_by: user
+  order: RO
+  mode: full
+metrics:
+- Recall
+- MRR
+- NDCG
+- Hit
+- Precision
+topk:
+- 10
+valid_metric: NDCG@10
+epochs: 500
+eval_step: 5
+stopping_step: 6
+show_progress: false
+checkpoint_dir: results/checkpoints
+shrink: 0

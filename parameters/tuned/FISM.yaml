@@ -1,0 +1,37 @@
+model: FISM
+dataset: ml-100k
+data_path: data/
+embedding_size: 256
+train_neg_sample_args:
+  distribution: uniform
+  sample_num: 1
+epochs: 500
+train_batch_size: 2048
+learner: adam
+learning_rate: 0.0011782048453893394
+eval_step: 5
+stopping_step: 6
+reg_weights:
+- 0.0001
+- 0.0001
+eval_args:
+  split:
+    RS:
+    - 0.8
+    - 0.1
+    - 0.1
+  group_by: user
+  order: RO
+  mode: full
+metrics:
+- Recall
+- MRR
+- NDCG
+- Hit
+- Precision
+topk:
+- 10
+valid_metric: NDCG@10
+show_progress: false
+checkpoint_dir: results/checkpoints
+alpha: 0.2846995360898716

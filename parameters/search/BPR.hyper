@@ -1,0 +1,5 @@
+learning_rate loguniform -11.5129,-4.6052
+train_batch_size choice [512,1024,2048,4096]
+embedding_size choice [32,64,128,256,512,1024]
+weight_decay choice [0,0.000001,0.00001,0.0001,0.001]
+train_neg_sample_args choice [{'distribution':'uniform','sample_num':1},{'distribution':'uniform','sample_num':2},{'distribution':'uniform','sample_num':4}]
