@@ -176,6 +176,32 @@ Three hybrid designs from Burke (2002) each testing a different idea from 1.3. A
 - **Mixed.** Every member's ranking is fused by reciprocal rank fusion with k = 60 (Cormack et al. 2009). It learns nothing so it shows what the 1.3 weights add.
 - **Cascade.** EASE proposes its top 50 and NeuMF reorders them. The two carry the largest 1.3 weights and come from different families.
 
+| Model | Test NDCG@10 | Test Recall@10 |
+| --- | --- | --- |
+| Weighted (1.3) | 0.3378 | 0.2879 |
+| Mixed | 0.3316 | 0.2776 |
+| EASE | 0.3309 | 0.2808 |
+| Switching | 0.3239 | 0.2726 |
+| Cascade | 0.3142 | 0.2656 |
+
+| Train Movies | Switching Member |
+| --- | --- |
+| 16 to 34 | LightGCN |
+| 34 to 92 | SLIMElastic |
+| 93 to 591 | EASE |
+
+**Observations.**
+- **Short histories go to the graph model.** LightGCN wins for the lightest users since propagation borrows signal from similar users when a user's own history is thin. Item-item models win once histories are long enough to match movie to movie so the hypothesis holds.
+- **Switching still trails EASE.** Each group picks from about 314 users so a small validation edge does not carry to test.
+- **Equal votes tie the best member.** Fusion counts weak members such as Pop and the neighbourhood models as much as strong ones. The 1.3 weights add about 0.006 on top by muting them.
+- **The last stage sets the order.** The cascade shortlist holds half of all test movies but NeuMF orders it worse than EASE does so the result lands beside NeuMF alone.
+- **Only learned weights clearly win.** Choosing one member per user or per stage throws away the others while weighting keeps every signal in proportion.
+
+*Figure: validation NDCG@10 of every member per train size group from `results/tuned/scores/*.npz` with `results/split/{train,valid}.tsv` · shows the winner shifting from LightGCN to the item-item models.*
+
+**Limitations.**
+- Groups and stages are fixed by hand. Their number · the shortlist depth and the fusion constant are settings for 1.5.
+
 ## Appendix A — Models
 
 | Model | How It Scores |
