@@ -29,12 +29,13 @@ Run from the repository root in this order. Every step writes to `results/` and 
 uv sync
 ```
 
-| Task                                     | Command                                   | Outcome                                                                                                       |
-| ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Task 1 — Hybrid Recommender**          |                                           |                                                                                                               |
-| 1.1 – Individual Models                  | `uv run python scripts/models.py`         | Score tables in `results/scores/` and test metrics in `results/metrics/` for 11 models in a few minutes       |
-| 1.2 – Individual Tuning                  | `uv run python scripts/tune.py`           | Every trial in `results/tuning/` and the winners in `parameters/tuned/` with `--workers 1` for an exact rerun |
-| 1.2 – Run Tuned Models                   | `uv run python scripts/models.py --tuned` | Score tables and test metrics of the tuned models in `results/tuned/`                                         |
-| 1.2 – Seed Inference                     | `uv run python scripts/seeds.py`          | Test metrics per seed from 2020 to 2024 in `results/seeds/` with mean and std in `summary.csv`                |
-| **Task 2 — Evaluation of Effectiveness** |                                           |                                                                                                               |
-| **Task 3 — Societal Aspects**            |                                           |                                                                                                               |
+| Task                                     | Command                                   | Outcome                                                                                                                 |
+| ---------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Task 1 — Hybrid Recommender**          |                                           |                                                                                                                         |
+| 1.1 – Individual Models                  | `uv run python scripts/models.py`         | Score tables in `results/scores/` and test metrics in `results/metrics/` for 11 models in a few minutes                 |
+| 1.2 – Individual Tuning                  | `uv run python scripts/tune.py`           | Every trial in `results/tuning/` and the winners in `parameters/tuned/` with `--workers 1` for an exact rerun           |
+| 1.2 – Run Tuned Models                   | `uv run python scripts/models.py --tuned` | Score tables and test metrics of the tuned models in `results/tuned/`                                                   |
+| 1.2 – Seed Inference                     | `uv run python scripts/seeds.py`          | Test metrics per seed from 2020 to 2024 in `results/seeds/` with mean and std in `summary.csv`                          |
+| 1.3 – Weighted Hybrid                    | `uv run python scripts/weighted.py`       | Weights cross-validation and test metrics in `results/hybrid/metrics/` and candidate scores in `results/hybrid/scores/` |
+| **Task 2 — Evaluation of Effectiveness** |                                           |                                                                                                                         |
+| **Task 3 — Societal Aspects**            |                                           |                                                                                                                         |

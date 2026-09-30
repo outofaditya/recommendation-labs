@@ -143,21 +143,56 @@ Random and Pop keep their course configurations. Their tuned column is the same 
 - Fitting on every movie outside train lost to SLIMElastic even on validation with 0.2509 against 0.2589. The fit spent its effort separating hits from obvious misses deep in the tail which motivated the candidate rows.
 - On candidates the L2 strength drives the ranking. Weak regularisation fits the 0 or 1 labels well but ranks poorly as correlated members cancel out with LightGCN at −0.90 against NGCF at 0.55. Strong regularisation pulls the weights toward a balanced mix that ranks better than any member.
 
-| L2 Strength C | Validation NDCG@10 |
+| L2 Strength C | Cross-Validated NDCG@10 |
 | --- | --- |
-| 100 | 0.2511 |
-| 1 | 0.2511 |
-| 0.01 | 0.2529 |
-| 0.0001 | 0.2640 |
-| SLIMElastic alone | 0.2589 |
+| 1 | 0.2508 |
+| 0.1 | 0.2505 |
+| 0.01 | 0.2521 |
+| 0.001 | 0.2571 |
+| 0.0001 | 0.2642 |
+| 0.00001 | 0.2631 |
+| 0.000001 | 0.2626 |
+| 0.0000001 | 0.2630 |
 
-These values are in-sample so C is chosen by five-fold user cross-validation before test is used for the final number.
+Cross-validation picks C = 0.0001 inside the grid. The best member SLIMElastic reaches 0.2589 on validation.
 
-*Insert figure: validation NDCG@10 against C for the hybrid with the best member as a line · shows ranking quality rising as the weights shrink toward a balanced mix.*
+*Insert figure: cross-validated NDCG@10 against C with SLIMElastic as a line · shows ranking quality rising as the weights shrink toward a balanced mix.*
+
+**Results.** The final weights are fitted on all users at C = 0.0001 and test is evaluated once.
+
+| Model | Test NDCG@10 | Test Recall@10 |
+| --- | --- | --- |
+| Weighted Hybrid | 0.3378 | 0.2879 |
+| EASE | 0.3309 | 0.2808 |
+| SLIMElastic | 0.3240 | 0.2769 |
+
+| Member | Weight | Spread Across Folds |
+| --- | --- | --- |
+| EASE | 0.139 | 0.002 |
+| NeuMF | 0.138 | 0.003 |
+| SLIMElastic | 0.111 | 0.003 |
+| FISM | 0.079 | 0.003 |
+| Pop | 0.035 | 0.004 |
+| BPR | 0.030 | 0.002 |
+| NGCF | 0.029 | 0.002 |
+| LightGCN | 0.003 | 0.001 |
+| UserKNN | −0.006 | 0.002 |
+| ItemKNN | −0.017 | 0.002 |
+
+**Observations.**
+- **The hybrid beats its best member narrowly.** It gains 0.007 NDCG@10 over EASE which is about one seed spread of EASE so the hypothesis holds on this split but only just.
+- **Weight goes to members that err differently.** EASE and SLIMElastic learn full item-item weights · NeuMF models user and movie through a non-linear MLP and FISM learns item similarity through low rank factors. Each looks at the data in a different way so their mistakes overlap less.
+- **Near-duplicate families share one slot.** BPR · NGCF and LightGCN all score by a dot product of learned embeddings. Once one of them is in the mix the others add little so LightGCN ends near zero despite ranking well alone.
+- **Neighbourhood models only correct.** ItemKNN and UserKNN carry the same co-occurrence signal that EASE and SLIMElastic learn better so they end with small negative weights.
+- **Shrinkage beats a free fit.** The pointwise loss rewards separating hits from misses rather than ordering the top so letting weights grow hurts ranking. A strongly regularised near-balanced mix ranks best which matches the blending literature.
+- **Weights are stable.** Every weight moves by at most 0.004 across folds so the contributions can be read directly in 2.3.
+
+*Insert figure: correlation between members' candidate scores · expected to show the embedding models and the item-item models as two correlated blocks.*
 
 **Limitations.**
 - The members were tuned on the same validation set so their validation scores are slightly optimistic. At worst the weights end up a little off which lowers the test score and never inflates it since test stays unseen. Stacking with out-of-fold retraining of every member would remove this at a cost of hours for a small effect.
 - The hybrid uses the seed 2020 split only since score tables exist for that split alone.
+- Candidates cover 79% of validation movies so the rest can never be ranked. The depth of 100 per member is a setting for 1.5.
 
 ## Appendix A — Model Descriptions
 
