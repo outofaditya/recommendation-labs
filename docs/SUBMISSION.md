@@ -6,7 +6,7 @@ Deadline **October 26 23:59** on Brightspace. Feedback sessions October 7 and 8 
 - [x] 1.1 Individual Models except Content-Based
 - [x] 1.2 Individual Tuning
 - [x] 1.3 Weighted Hybrid with Regression Coefficients
-- [ ] 1.4 Other Hybrids
+- [x] 1.4 Other Hybrids
 - [ ] 1.5 Hybrid Tuning
 
 ## Task 2 — Evaluation of Effectiveness

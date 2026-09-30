@@ -37,5 +37,6 @@ uv sync
 | 1.2 – Run Tuned Models                   | `uv run python scripts/models.py --tuned` | Score tables and test metrics of the tuned models in `results/tuned/`                                                   |
 | 1.2 – Seed Inference                     | `uv run python scripts/seeds.py`          | Test metrics per seed from 2020 to 2024 in `results/seeds/` with mean and std in `summary.csv`                          |
 | 1.3 – Weighted Hybrid                    | `uv run python scripts/weighted.py`       | Weights cross-validation and test metrics in `results/hybrid/metrics/` and candidate scores in `results/hybrid/scores/` |
+| 1.4 – Other Hybrids                      | `uv run python scripts/hybrids.py`        | Switching · mixed and cascade scores and test metrics in `results/hybrid/`                                              |
 | **Task 2 — Evaluation of Effectiveness** |                                           |                                                                                                                         |
 | **Task 3 — Societal Aspects**            |                                           |                                                                                                                         |
