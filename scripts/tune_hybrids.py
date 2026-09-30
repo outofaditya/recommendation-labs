@@ -1,18 +1,35 @@
 import numpy as np
 from itertools import permutations, product
-from hybrids import best, groups, ndcg, ranks, shortlisted, switching
+from hybrids import (
+    augmentation,
+    best,
+    booster,
+    combination,
+    groups,
+    metalevel,
+    ndcg,
+    pairs,
+    ranks,
+    shortlisted,
+    switching,
+)
 from source.hybrids.pool import MEMBERS, candidates, features, folds, save
 from source.metrics.accuracy import accuracy, top
 from weighted import fit, validate
 
 VOTERS = [2, 3, 5, 10]
+TREES = [2, 3, 4, None]
+RATES = [0.03, 0.1, 0.3]
 COUNTS = [1, 2, 3, 4, 5]
+PEERS = [25, 50, 100, 200]
 DEPTHS = [25, 50, 100, 200]
+PSEUDOS = [0, 5, 10, 20, 50]
+SOURCES = ["LightGCN", "NGCF"]
 SHORTLISTS = [20, 50, 100, 200]
 FUSIONS = [1, 10, 30, 60, 100, 300]
 
 
-# depth and strength are chosen together by user cross-validation
+# depth and strength are chosen together by user cross validation
 def weighted(x, masks):
     runs = {}
     for depth in DEPTHS:
@@ -70,8 +87,8 @@ def mix(x, masks):
 # every ordered pair of members with each shortlist size
 def chain(x, masks):
     hidden, relevant, runs = masks["train"], masks["valid"], {}
-    pairs = permutations(range(len(MEMBERS)), 2)
-    for (first, second), size in product(pairs, SHORTLISTS):
+    orders = permutations(range(len(MEMBERS)), 2)
+    for (first, second), size in product(orders, SHORTLISTS):
         table = shortlisted(x[..., first], x[..., second], hidden, size)
         runs[first, second, size] = ndcg(table, hidden, relevant)
     first, second, size = max(runs, key=runs.get)
@@ -83,10 +100,50 @@ def chain(x, masks):
     return table, {"stages": stages, "shortlist": size, "valid": grid}
 
 
+# depth and learning rate chosen by user cross validation
+def boost(x, masks):
+    train, valid = masks["train"], masks["valid"]
+    pool = candidates(x, train)
+    rows, labels, owners = pairs(x, train)(pool), valid[pool], np.nonzero(pool)[0]
+    runs = {}
+    for depth, rate in product(TREES, RATES):
+        scores = []
+        for held in folds(len(x)):
+            rest = ~np.isin(owners, held)
+            model = booster(depth, rate).fit(rows[rest], labels[rest])
+            table = np.full(train.shape, -np.inf)
+            table[pool] = model.decision_function(rows)
+            scores.append(ndcg(table[held], train[held], valid[held]))
+        runs[depth, rate] = float(np.mean(scores))
+    depth, rate = max(runs, key=runs.get)
+    table, details = combination(x, masks, depth, rate)
+    cv = {f"{d} {r:g}": round(score, 4) for (d, r), score in runs.items()}
+    return table, details | {"depth": depth, "rate": rate, "cv": cv}
+
+
+# a table that depends on train alone is scored on plain validation
+def plain(x, masks, build, grid):
+    hidden, relevant = masks["train"], masks["valid"]
+    runs = {key: ndcg(build(x, masks, *key)[0], hidden, relevant) for key in grid}
+    key = max(runs, key=runs.get)
+    table, details = build(x, masks, *key)
+    valid = {f"{a} {b}": round(score, 4) for (a, b), score in runs.items()}
+    return table, details | {"valid": valid}
+
+
+def densify(x, masks):
+    return plain(x, masks, augmentation, product(PSEUDOS, PEERS))
+
+
+def meta(x, masks):
+    return plain(x, masks, metalevel, product(SOURCES, PEERS))
+
+
 if __name__ == "__main__":
     x, masks, users, items = features()
     seen = masks["train"] | masks["valid"]
     builds = {"Mixed": mix, "Cascade": chain, "Weighted": weighted, "Switching": switch}
+    builds |= {"Metalevel": meta, "Combination": boost, "Augmentation": densify}
     for name, build in builds.items():
         table, details = build(x, masks)
         test = accuracy(top(table, seen), masks["test"])

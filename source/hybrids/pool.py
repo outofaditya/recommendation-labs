@@ -32,7 +32,7 @@ def candidates(x, hidden, depth=DEPTH):
     return pool
 
 
-# the same five user folds for every cross-validated choice
+# the same five user folds for every cross validated choice
 def folds(count):
     return np.array_split(np.random.RandomState(2020).permutation(count), FOLDS)
 

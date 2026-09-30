@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier
 from source.hybrids.pool import MEMBERS, candidates, features, save
-from source.hybrids.side import embeddings, side, userknn
+from source.hybrids.side import K, embeddings, side, userknn
 from source.metrics.accuracy import accuracy, top
 
 GROUPS = 3
@@ -81,14 +81,21 @@ def pairs(x, train):
     return rows
 
 
-# one boosted learner over every source learns where each member is right
-def combination(x, masks):
-    train, seen = masks["train"], masks["train"] | masks["valid"]
-    rows, occupation = pairs(x, train), [len(MEMBERS) + 2]
-    pool, test = candidates(x, train), candidates(x, seen)
-    model = HistGradientBoostingClassifier(
-        categorical_features=occupation, random_state=2020
+def booster(depth=None, rate=0.1):
+    occupation = [len(MEMBERS) + 2]
+    return HistGradientBoostingClassifier(
+        max_depth=depth,
+        learning_rate=rate,
+        categorical_features=occupation,
+        random_state=2020,
     )
+
+
+# one boosted learner over every source learns where each member is right
+def combination(x, masks, depth=None, rate=0.1):
+    train, seen = masks["train"], masks["train"] | masks["valid"]
+    pool, test = candidates(x, train), candidates(x, seen)
+    rows, model = pairs(x, train), booster(depth, rate)
     model.fit(rows(pool), masks["valid"][pool])
     table = np.full(train.shape, -np.inf)
     table[test] = model.decision_function(rows(test))
@@ -96,19 +103,19 @@ def combination(x, masks):
 
 
 # the densifier's top unseen picks join train before userknn is refit
-def augmentation(x, masks, pseudo=PSEUDO):
+def augmentation(x, masks, pseudo=PSEUDO, k=K):
     train = masks["train"]
     first = np.where(train, -np.inf, x[..., MEMBERS.index(DENSIFIER)])
     picks = np.argpartition(-first, pseudo, axis=1)[:, :pseudo]
     dense = train.copy()
     np.put_along_axis(dense, picks, True, axis=1)
-    return userknn(dense, dense), {"densifier": DENSIFIER, "pseudo": pseudo}
+    return userknn(dense, dense, k), {"densifier": DENSIFIER, "pseudo": pseudo, "k": k}
 
 
 # userknn takes its peers from learned embeddings instead of raw ratings
-def metalevel(x, masks):
-    table = userknn(embeddings(EMBEDDED), masks["train"])
-    return table, {"embeddings": EMBEDDED}
+def metalevel(x, masks, source=EMBEDDED, k=K):
+    table = userknn(embeddings(source), masks["train"], k)
+    return table, {"embeddings": source, "k": k}
 
 
 if __name__ == "__main__":
