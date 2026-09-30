@@ -23,6 +23,7 @@ Eleven models from five families: Random and Pop as baselines · ItemKNN and Use
 | A tuned BPR matches or beats NeuMF | Rendle et al. (2020) |
 | LightGCN beats NGCF | He et al. (2020) |
 | A weighted hybrid beats its best member | Different families make different errors (Burke 2002) |
+| Different members win for different user groups | Short histories favour broad signals over item-item ones |
 
 ### 1.1 Individual Models
 
@@ -165,6 +166,15 @@ Fitting on every movie outside train lost to SLIMElastic even on validation (0.2
 - Members were tuned on the same validation set which can only lower the test score. Full stacking would cost hours of retraining for a small effect.
 - Only the seed 2020 split has score tables.
 - 21% of validation movies fall outside the candidates and can never be ranked. The depth of 100 is a setting for 1.5.
+
+### 1.4 Other Hybrids
+
+Three hybrid designs from Burke (2002) each testing a different idea from 1.3. All use the tuned members and the 1.3 protocol.
+
+**Method.**
+- **Switching.** Users fall into three equal groups by train size. Each group uses the member with the best validation NDCG@10 in that group so it tests whether families win for different users.
+- **Mixed.** Every member's ranking is fused by reciprocal rank fusion with k = 60 (Cormack et al. 2009). It learns nothing so it shows what the 1.3 weights add.
+- **Cascade.** EASE proposes its top 50 and NeuMF reorders them. The two carry the largest 1.3 weights and come from different families.
 
 ## Appendix A — Models
 
