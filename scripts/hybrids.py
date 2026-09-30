@@ -1,10 +1,15 @@
 import numpy as np
-from source.hybrids.pool import MEMBERS, features, save
+from sklearn.ensemble import HistGradientBoostingClassifier
+from source.hybrids.pool import MEMBERS, candidates, features, save
+from source.hybrids.side import embeddings, side, userknn
 from source.metrics.accuracy import accuracy, top
 
 GROUPS = 3
+PSEUDO = 10
 FUSION = 60
 SHORTLIST = 50
+DENSIFIER = "EASE"
+EMBEDDED = "LightGCN"
 STAGES = "EASE", "NeuMF"
 
 
@@ -46,10 +51,53 @@ def cascade(x, masks):
     return table, {"stages": STAGES, "shortlist": SHORTLIST}
 
 
+# member scores beside side data for each candidate pair
+def pairs(x, train):
+    person, movie = side()
+    movies = np.column_stack([movie, train.sum(axis=0)])
+    people = np.column_stack([person, train.sum(axis=1)])
+
+    def rows(pool):
+        users, items = np.nonzero(pool)
+        return np.column_stack([x[pool], people[users], movies[items]])
+
+    return rows
+
+
+# one boosted learner over every source learns where each member is right
+def combination(x, masks):
+    train, seen = masks["train"], masks["train"] | masks["valid"]
+    rows, occupation = pairs(x, train), [len(MEMBERS) + 2]
+    pool, test = candidates(x, train), candidates(x, seen)
+    model = HistGradientBoostingClassifier(
+        categorical_features=occupation, random_state=2020
+    )
+    model.fit(rows(pool), masks["valid"][pool])
+    table = np.full(train.shape, -np.inf)
+    table[test] = model.decision_function(rows(test))
+    return table, {"iterations": model.n_iter_}
+
+
+# the densifier's top unseen picks join train before userknn is refit
+def augmentation(x, masks, pseudo=PSEUDO):
+    train = masks["train"]
+    first = np.where(train, -np.inf, x[..., MEMBERS.index(DENSIFIER)])
+    picks = np.argpartition(-first, pseudo, axis=1)[:, :pseudo]
+    dense = train.copy()
+    np.put_along_axis(dense, picks, True, axis=1)
+    return userknn(dense, dense), {"densifier": DENSIFIER, "pseudo": pseudo}
+
+
+# userknn takes its peers from learned embeddings instead of raw ratings
+def metalevel(x, masks):
+    table = userknn(embeddings(EMBEDDED), masks["train"])
+    return table, {"embeddings": EMBEDDED}
+
+
 if __name__ == "__main__":
     x, masks, users, items = features()
     seen = masks["train"] | masks["valid"]
-    for build in (switching, mixed, cascade):
+    for build in (switching, mixed, cascade, combination, augmentation, metalevel):
         table, details = build(x, masks)
         test = accuracy(top(table, seen), masks["test"])
         save(build.__name__.title(), table, users, items, details | {"test": test})
