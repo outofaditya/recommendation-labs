@@ -1,8 +1,11 @@
+import json
+
 import numpy as np
-from source.data import MODELS, scores, split
+from source.data import MODELS, RESULTS, scores, split
 
 MEMBERS = [name for name in MODELS if name != "Random"]
 DEPTH = 100
+FOLDER = RESULTS / "hybrid"
 
 
 # each member standardised per user over the movies outside train
@@ -26,3 +29,13 @@ def candidates(x, hidden):
         best = np.argpartition(-masked, DEPTH, axis=1)[:, :DEPTH]
         np.put_along_axis(pool, best, True, axis=1)
     return pool
+
+
+def save(name, table, users, items, metrics):
+    for kind in ("scores", "metrics"):
+        (FOLDER / kind).mkdir(parents=True, exist_ok=True)
+    scores = table.astype(np.float32)
+    path = FOLDER / "scores" / f"{name}.npz"
+    np.savez_compressed(path, scores=scores, users=users, items=items)
+    (FOLDER / "metrics" / f"{name}.json").write_text(json.dumps(metrics, indent=2))
+    print(name, json.dumps(metrics, indent=2))
