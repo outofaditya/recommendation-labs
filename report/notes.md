@@ -202,6 +202,18 @@ Three hybrid designs from Burke (2002) each testing a different idea from 1.3. A
 **Limitations.**
 - Groups and stages are fixed by hand. Their number · the shortlist depth and the fusion constant are settings for 1.5.
 
+### 1.5 Hybrid Tuning
+
+Every setting is chosen on validation and each tuned hybrid is scored on test once. Hybrids that learn from validation are tuned by the same five-fold user cross-validation as 1.3 so no user scores a choice it helped make.
+
+**Method.**
+- **Weighted.** Candidate depth 25 · 50 · 100 · 200 jointly with the eight L2 strengths by cross-validation.
+- **Switching.** 1 to 5 train size groups by cross-validation where 1 group is the best single member.
+- **Mixed.** Fusion constant 1 · 10 · 30 · 60 · 100 · 300 over the best 2 · 3 · 5 or all 10 members by their own validation NDCG@10 on plain validation.
+- **Cascade.** Every ordered pair of members with shortlists of 20 · 50 · 100 · 200 on plain validation.
+
+**Proof.** Each 1.3 and 1.4 default sits inside its grid and must reproduce its recorded numbers before any tuned number is trusted.
+
 ## Appendix A — Models
 
 | Model | How It Scores |
