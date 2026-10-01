@@ -5,6 +5,7 @@ from source.data import MODELS, RESULTS, scores, split
 
 MEMBERS = [name for name in MODELS if name != "Random"]
 DEPTH = 100
+FOLDS = 5
 FOLDER = RESULTS / "hybrid"
 
 
@@ -22,13 +23,18 @@ def features():
 
 
 # union of every member's top movies outside the hidden ones
-def candidates(x, hidden):
+def candidates(x, hidden, depth=DEPTH):
     pool = np.zeros(hidden.shape, dtype=bool)
     for member in np.moveaxis(x, -1, 0):
         masked = np.where(hidden, -np.inf, member)
-        best = np.argpartition(-masked, DEPTH, axis=1)[:, :DEPTH]
+        best = np.argpartition(-masked, depth, axis=1)[:, :depth]
         np.put_along_axis(pool, best, True, axis=1)
     return pool
+
+
+# the same five user folds for every cross validated choice
+def folds(count):
+    return np.array_split(np.random.RandomState(2020).permutation(count), FOLDS)
 
 
 def save(name, table, users, items, metrics):

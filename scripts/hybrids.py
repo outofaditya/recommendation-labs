@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier
 from source.hybrids.pool import MEMBERS, candidates, features, save
-from source.hybrids.side import embeddings, side, userknn
+from source.hybrids.side import K, embeddings, side, userknn
 from source.metrics.accuracy import accuracy, top
 
 GROUPS = 3
@@ -17,38 +17,55 @@ def ndcg(scores, hidden, relevant):
     return accuracy(top(scores, hidden), relevant)["ndcg@10"]
 
 
-# each activity group takes its best member on validation
-def switching(x, masks):
+def best(x, masks, users):
+    hidden, relevant = masks["train"][users], masks["valid"][users]
+    runs = [ndcg(x[users, :, j], hidden, relevant) for j in range(len(MEMBERS))]
+    return int(np.argmax(runs))
+
+
+# users split into equal groups by train size
+def groups(masks, count):
     order = np.argsort(masks["train"].sum(axis=1), kind="stable")
+    return np.array_split(order, count)
+
+
+# each activity group takes its best member on validation
+def switching(x, masks, count=GROUPS):
     table, chosen = np.empty(x.shape[:2]), []
-    for group in np.array_split(order, GROUPS):
-        hidden, relevant = masks["train"][group], masks["valid"][group]
-        runs = [ndcg(x[group, :, j], hidden, relevant) for j in range(len(MEMBERS))]
-        best = int(np.argmax(runs))
-        table[group] = x[group, :, best]
+    for group in groups(masks, count):
+        member = best(x, masks, group)
+        table[group] = x[group, :, member]
         size = masks["train"][group].sum(axis=1)
-        chosen.append(
-            {"train": [int(size.min()), int(size.max())], "member": MEMBERS[best]}
-        )
+        span = [int(size.min()), int(size.max())]
+        chosen.append({"train": span, "member": MEMBERS[member]})
     return table, {"groups": chosen}
+
+
+# every member's rank of each movie with hidden movies last
+def ranks(x, hidden):
+    masked = np.where(hidden[..., None], -np.inf, x)
+    return np.argsort(np.argsort(-masked, axis=1), axis=1) + 1
 
 
 # reciprocal rank fusion of every member over the unseen movies
 def mixed(x, masks):
     seen = masks["train"] | masks["valid"]
-    masked = np.where(seen[..., None], -np.inf, x)
-    ranks = np.argsort(np.argsort(-masked, axis=1), axis=1) + 1
-    return (1 / (FUSION + ranks)).sum(axis=-1), {"k": FUSION}
+    return (1 / (FUSION + ranks(x, seen))).sum(axis=-1), {"k": FUSION}
 
 
-# the first stage shortlists unseen movies and the second orders them
+# the first stage shortlists unhidden movies and the second orders them
+def shortlisted(first, second, hidden, size):
+    shortlist = np.argsort(np.where(hidden, np.inf, -first), axis=1)[:, :size]
+    table = np.full(first.shape, -np.inf)
+    np.put_along_axis(table, shortlist, np.take_along_axis(second, shortlist, 1), 1)
+    return table
+
+
 def cascade(x, masks):
     seen = masks["train"] | masks["valid"]
     first, second = (x[..., MEMBERS.index(name)] for name in STAGES)
-    shortlist = np.argsort(np.where(seen, np.inf, -first), axis=1)[:, :SHORTLIST]
-    table = np.full(first.shape, -np.inf)
-    np.put_along_axis(table, shortlist, np.take_along_axis(second, shortlist, 1), 1)
-    return table, {"stages": STAGES, "shortlist": SHORTLIST}
+    details = {"stages": STAGES, "shortlist": SHORTLIST}
+    return shortlisted(first, second, seen, SHORTLIST), details
 
 
 # member scores beside side data for each candidate pair
@@ -64,14 +81,21 @@ def pairs(x, train):
     return rows
 
 
-# one boosted learner over every source learns where each member is right
-def combination(x, masks):
-    train, seen = masks["train"], masks["train"] | masks["valid"]
-    rows, occupation = pairs(x, train), [len(MEMBERS) + 2]
-    pool, test = candidates(x, train), candidates(x, seen)
-    model = HistGradientBoostingClassifier(
-        categorical_features=occupation, random_state=2020
+def booster(depth=None, rate=0.1):
+    occupation = [len(MEMBERS) + 2]
+    return HistGradientBoostingClassifier(
+        max_depth=depth,
+        learning_rate=rate,
+        categorical_features=occupation,
+        random_state=2020,
     )
+
+
+# one boosted learner over every source learns where each member is right
+def combination(x, masks, depth=None, rate=0.1):
+    train, seen = masks["train"], masks["train"] | masks["valid"]
+    pool, test = candidates(x, train), candidates(x, seen)
+    rows, model = pairs(x, train), booster(depth, rate)
     model.fit(rows(pool), masks["valid"][pool])
     table = np.full(train.shape, -np.inf)
     table[test] = model.decision_function(rows(test))
@@ -79,19 +103,19 @@ def combination(x, masks):
 
 
 # the densifier's top unseen picks join train before userknn is refit
-def augmentation(x, masks, pseudo=PSEUDO):
+def augmentation(x, masks, pseudo=PSEUDO, k=K):
     train = masks["train"]
     first = np.where(train, -np.inf, x[..., MEMBERS.index(DENSIFIER)])
     picks = np.argpartition(-first, pseudo, axis=1)[:, :pseudo]
     dense = train.copy()
     np.put_along_axis(dense, picks, True, axis=1)
-    return userknn(dense, dense), {"densifier": DENSIFIER, "pseudo": pseudo}
+    return userknn(dense, dense, k), {"densifier": DENSIFIER, "pseudo": pseudo, "k": k}
 
 
 # userknn takes its peers from learned embeddings instead of raw ratings
-def metalevel(x, masks):
-    table = userknn(embeddings(EMBEDDED), masks["train"])
-    return table, {"embeddings": EMBEDDED}
+def metalevel(x, masks, source=EMBEDDED, k=K):
+    table = userknn(embeddings(source), masks["train"], k)
+    return table, {"embeddings": source, "k": k}
 
 
 if __name__ == "__main__":

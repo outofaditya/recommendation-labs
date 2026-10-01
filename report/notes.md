@@ -214,6 +214,86 @@ The remaining six designs of Burke (2002) on the tuned members and the 1.3 proto
 **Limitations.**
 - Groups and stages and the booster and the pseudo count are fixed by hand as settings for 1.5.
 
+### 1.5 Hybrid Tuning
+
+Every setting is chosen on validation and each tuned hybrid is scored on test once. Hybrids that learn from validation are tuned by the same five-fold user cross-validation as 1.3 so no user scores a choice it helped make.
+
+**Method.**
+- **Weighted.** Candidate depth 25 · 50 · 100 · 200 jointly with the eight L2 strengths by cross-validation.
+- **Switching.** 1 to 5 train size groups by cross-validation where 1 group is the best single member.
+- **Mixed.** Fusion constant 1 · 10 · 30 · 60 · 100 · 300 over the best 2 · 3 · 5 or all 10 members by their own validation NDCG@10 on plain validation.
+- **Cascade.** Every ordered pair of members with shortlists of 20 · 50 · 100 · 200 on plain validation.
+- **Feature Combination.** Tree depth 2 · 3 · 4 or unlimited with learning rates 0.03 · 0.1 · 0.3 by cross-validation.
+- **Feature Augmentation.** Pseudo-interactions 0 · 5 · 10 · 20 · 50 per user with 25 · 50 · 100 · 200 peers on plain validation.
+- **Meta-Level.** LightGCN or NGCF embeddings with 25 · 50 · 100 · 200 peers on plain validation.
+
+**Proof.** Each 1.3 and 1.4 default sits inside its grid and must reproduce its recorded numbers before any tuned number is trusted.
+
+**Weighted.** At depth 100 the cross-validation reproduces the 1.3 scores exactly. Tuning keeps the default of depth 100 at C = 0.0001 so test stays at 0.3378. Depth 25 to 200 moves the best cross-validated score by under 0.001 while C moves it by 0.011 to 0.022 so the shrinkage matters and the candidate count does not.
+
+**Switching.** Four groups win cross-validation and pick LightGCN for users with 16 to 27 train movies and SLIMElastic above. Test falls to 0.3209 against 0.3239 for the default of three. One to five groups score 0.2545 and 0.2505 and 0.2499 and 0.2572 and 0.2565 in cross-validation. Four groups beat three on all five folds by 0.007 but beat one group on only three folds by 0.003 so switching gains nothing reliable over the best single member once the choice is made on held-out users.
+
+**Mixed.** At k = 60 with all 10 members the test scores reproduce 1.4 exactly. All 10 members win at k = 10 and test rises to 0.3388 against 0.3316 for the default.
+
+| Members | Best k | Validation NDCG@10 |
+| --- | --- | --- |
+| 2 | 1 | 0.2620 |
+| 3 | 1 | 0.2634 |
+| 5 | 1 | 0.2657 |
+| 10 | 10 | 0.2671 |
+
+A small k lets the top ranks dominate so weak members barely vote. This mutes them as the 1.3 weights do and matches Weighted within 0.001 without learning. The choice is made on plain validation and k = 1 trails k = 10 by only 0.0004.
+
+**Cascade.** EASE to NeuMF at 50 reproduces the 1.4 test scores exactly and sits at 0.2487 on validation. Of 360 settings BPR shortlisting 20 for SLIMElastic wins and test rises to 0.3282 against 0.3142 for the default.
+
+| Stages | Shortlist | Validation NDCG@10 |
+| --- | --- | --- |
+| BPR → SLIMElastic | 20 | 0.2624 |
+| LightGCN → SLIMElastic | 20 | 0.2622 |
+| LightGCN → SLIMElastic | 50 | 0.2599 |
+| SLIMElastic alone | — | 0.2589 |
+| EASE → NeuMF | 50 | 0.2487 |
+
+The strongest member belongs second where it orders a short list that a different model family proposes. The default wasted EASE on shortlisting and let the weaker NeuMF decide. The winner beats SLIMElastic alone by 0.0035 on validation but was picked from 360 settings so part of that gain is selection luck. On test it still trails EASE alone at 0.3309.
+
+**Feature Combination.** Unlimited depth at rate 0.1 reproduces the 1.4 cross-validation of 0.2520. Depth 2 wins at 0.2635 and test rises to 0.3373 against 0.3305. It stops at the 100 round cap but lifting the cap to 1000 only moves it to 0.2628. The best booster is the shallowest and still trails linear Weighted at 0.2642.
+
+**Feature Augmentation.** No pseudo-interactions at 50 peers reproduces UserKNN at 0.2355 on validation. Five pseudo-interactions with 25 peers win at 0.2426 and test rises to 0.3027 against 0.2981.
+
+| Peers | 0 Pseudo | 5 Pseudo | 10 Pseudo | 50 Pseudo |
+| --- | --- | --- | --- | --- |
+| 25 | 0.2259 | 0.2426 | 0.2403 | 0.1969 |
+| 50 | 0.2355 | 0.2397 | 0.2379 | 0.2066 |
+| 200 | 0.2241 | 0.2238 | 0.2229 | 0.2099 |
+
+Pseudo-interactions gain 0.017 with 25 peers and nothing with 200 so densifying pays only while neighbourhoods are narrow.
+
+**Meta-Level.** LightGCN at 50 peers reproduces 1.4. NGCF embeddings at 50 peers win at 0.2512 against 0.2477 and test moves to 0.3030 against 0.3023.
+
+**Results.** Test scores of each default against its tuned setting in `results/hybrid/metrics/Tuned*.json`.
+
+| Hybrid | Default NDCG@10 | Tuned NDCG@10 | Tuned Recall@10 | Tuned Setting |
+| --- | --- | --- | --- | --- |
+| Mixed | 0.3316 | 0.3388 | 0.2844 | All 10 Members at k = 10 |
+| Weighted | 0.3378 | 0.3378 | 0.2879 | Depth 100 at C = 0.0001 |
+| Feature Combination | 0.3305 | 0.3373 | 0.2902 | Depth 2 at Rate 0.1 |
+| Cascade | 0.3142 | 0.3282 | 0.2831 | BPR → SLIMElastic at 20 |
+| Switching | 0.3239 | 0.3209 | 0.2728 | 4 Groups |
+| Meta-Level | 0.3023 | 0.3030 | 0.2590 | NGCF at 50 Peers |
+| Feature Augmentation | 0.2981 | 0.3027 | 0.2562 | 5 Pseudo at 25 Peers |
+| EASE | — | 0.3309 | 0.2808 | Best Single Model |
+
+**Observations.**
+- **Tuning mostly fixes bad defaults.** Cascade gains 0.014 once the order of its stages flips while Weighted was already at its optimum.
+- **Muting weak members is what pays.** A small fusion constant and strong L2 shrinkage both let the best members decide and land within 0.001 of each other.
+- **Non-linearity pays only when held down.** The booster gains 0.007 once its trees are cut to depth 2 and then lands within 0.0005 of Weighted.
+
+*Figure: validation NDCG@10 over the mixed grid from `results/hybrid/metrics/TunedMixed.json` · shows the gain from small k and more members.*
+
+**Limitations.**
+- Mixed and Cascade and Augmentation and Meta-Level settings are chosen on plain validation so their test gains may include selection luck.
+- Tuned Mixed and Combination sit within one seed spread of Weighted so none of the three is reliably best.
+
 ## Appendix A — Models
 
 | Model | How It Scores |

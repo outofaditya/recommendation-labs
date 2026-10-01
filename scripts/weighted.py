@@ -1,9 +1,8 @@
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from source.hybrids.pool import MEMBERS, candidates, features, save
+from source.hybrids.pool import MEMBERS, candidates, features, folds, save
 from source.metrics.accuracy import accuracy, top
 
-FOLDS = 5
 GRID = [10.0**power for power in range(-7, 1)]
 
 
@@ -17,11 +16,10 @@ def rank(x, weights, pool, hidden, relevant):
 
 # each strength is fitted on four folds of users and scored on the fifth
 def validate(x, pool, masks):
-    users = np.random.RandomState(2020).permutation(len(x))
-    folds, runs = np.array_split(users, FOLDS), {}
+    runs = {}
     for strength in GRID:
         ndcg, weights = [], []
-        for held in folds:
+        for held in folds(len(x)):
             rows = pool.copy()
             rows[held] = False
             weights.append(fit(x[rows], masks["valid"][rows], strength))

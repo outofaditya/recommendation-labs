@@ -1,3 +1,5 @@
+from functools import cache
+
 import numpy as np
 import pandas as pd
 from source.data import RESULTS, scores
@@ -12,6 +14,7 @@ def atoms(kind, tokens):
 
 
 # genres and release year per movie then age gender and occupation per user
+@cache
 def side():
     _, users, items = scores("Pop")
     movies, people = atoms("item", items), atoms("user", users)
@@ -24,6 +27,7 @@ def side():
 
 
 # the saved user embeddings that rebuild the tuned score table
+@cache
 def embeddings(name):
     table = scores(name)[0]
     for path in (RESULTS / "checkpoints").glob(f"*-{name}-*-embeddings.npz"):
