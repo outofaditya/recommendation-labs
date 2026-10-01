@@ -1,14 +1,10 @@
-import json
-
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from source.data import RESULTS
-from source.hybrids.pool import MEMBERS, candidates, features
+from source.hybrids.pool import MEMBERS, candidates, features, save
 from source.metrics.accuracy import accuracy, top
 
 FOLDS = 5
 GRID = [10.0**power for power in range(-7, 1)]
-FOLDER = RESULTS / "hybrid"
 
 
 def fit(x, labels, strength):
@@ -46,17 +42,9 @@ if __name__ == "__main__":
     test = accuracy(top(hybrid, seen), masks["test"])
     spread = runs[strength][1].std(axis=0)
 
-    (FOLDER / "scores").mkdir(parents=True, exist_ok=True)
-    (FOLDER / "metrics").mkdir(parents=True, exist_ok=True)
-    table = hybrid.astype(np.float32)
-    np.savez_compressed(
-        FOLDER / "scores" / "Weighted.npz", scores=table, users=users, items=items
-    )
     coverage = round(float(masks["valid"][pool].sum() / masks["valid"].sum()), 4)
     cv = {f"{c:g}": round(float(np.mean(runs[c][0])), 4) for c in GRID}
     metrics = {"rows": int(pool.sum()), "coverage": coverage, "cv": cv, "C": strength}
     metrics["weights"] = dict(zip(MEMBERS, weights.round(4).tolist()))
     metrics["spread"] = dict(zip(MEMBERS, spread.round(4).tolist()))
-    metrics["test"] = test
-    (FOLDER / "metrics" / "Weighted.json").write_text(json.dumps(metrics, indent=2))
-    print(json.dumps(metrics, indent=2))
+    save("Weighted", hybrid, users, items, metrics | {"test": test})
