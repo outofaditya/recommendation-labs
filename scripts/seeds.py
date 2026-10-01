@@ -1,20 +1,23 @@
 import os
 import argparse
-from pathlib import Path
 from multiprocessing import get_context
 from concurrent.futures import ProcessPoolExecutor
 
 import torch
 import pandas as pd
-from export_scores import MODELS, fit, load
+from export_scores import fit, load
+from source.data import MODELS, RESULTS
 
 SEEDS = [2020, 2021, 2022, 2023, 2024]
-FOLDER = Path("results/seeds")
+FOLDER = RESULTS / "seeds"
 
 
 def repeat(name, seed):
     torch.set_num_threads(1)
-    overrides = {"seed": seed, "checkpoint_dir": f"results/checkpoints/{seed}"}
+    overrides = {
+        "seed": seed,
+        "checkpoint_dir": str(RESULTS / "checkpoints" / str(seed)),
+    }
     _, loaders, _, trainer, _, epochs = fit(load(name, "parameters/tuned", overrides))
     test = trainer.evaluate(loaders[2], load_best_model=True)
     return {"model": name, "seed": seed, "epochs": epochs} | dict(test)

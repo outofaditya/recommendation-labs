@@ -10,23 +10,9 @@ import pandas as pd
 from recbole.config import Config
 from recbole.data.interaction import Interaction
 from recbole.data import create_dataset, data_preparation
+from source.data import RESULTS
 from recbole.utils import init_seed, get_model, get_trainer
 
-# slowest first so pools finish early
-MODELS = [
-    "FISM",
-    "NGCF",
-    "LightGCN",
-    "BPR",
-    "NeuMF",
-    "SLIMElastic",
-    "ItemKNN",
-    "UserKNN",
-    "EASE",
-    "Pop",
-    "Random",
-]
-RESULTS = Path("results")
 warnings.filterwarnings("ignore")
 logging.disable(logging.WARNING)
 

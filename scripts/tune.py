@@ -11,6 +11,7 @@ import torch
 import numpy as np
 import pandas as pd
 from export_scores import fit
+from source.data import RESULTS
 from hyperopt.base import Domain
 from recbole.config import Config
 from recbole.trainer import HyperTuning
@@ -19,7 +20,7 @@ from hyperopt import tpe, Trials, STATUS_OK, JOB_STATE_DONE, space_eval
 
 SEARCH = Path("parameters/search")
 TUNED = Path("parameters/tuned")
-TRIALS = Path("results/tuning")
+TRIALS = RESULTS / "tuning"
 PLAN = {
     "EASE": ("exhaustive", None),
     "ItemKNN": ("exhaustive", None),
