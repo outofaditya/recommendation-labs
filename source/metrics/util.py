@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import json
 from pathlib import Path
@@ -19,26 +20,19 @@ class RecommenderResultLoader:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        """Releases file handles"""
+        if self._npz_file is not None:
+            self._npz_file.close()
 
-    def load_predictions(self, npz_filename, memory_map: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def load_predictions(self, npz_filename: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Loads the users, items, and scores from the NPZ archive."""
         filepath = self.base_dir / "scores" / npz_filename
-
-        if not filepath.exists():
+        if not os.path.exists(filepath):
             raise FileNotFoundError(f"Prediction file not found: {filepath}")
 
-        # Performance: mmap_mode='r' reads data from disk on-demand rather than loading
-        # massive matrices directly into RAM.
-        # mmap = 'r' if memory_map else None
-        mmap = None
-
         try:
-            self._npz_file = np.load(filepath, allow_pickle=False, mmap_mode=mmap)
+            self._npz_file = np.load(filepath, allow_pickle=False)
 
-            # The keys typically exclude the .npy extension when accessed via NpzFile,
-            # but sometimes generators explicitly name them with the extension.
-            # We check both to be safe.
             assert self._npz_file is not None, "._npz_file was none when it should have been leaded"
             users = self._npz_file["users"]
             items = self._npz_file["items"]
@@ -71,7 +65,34 @@ class RecommenderResultLoader:
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON format in metrics file: {e}")
 
-    def close(self):
-        """Releases file handles, essential when using memory mapping."""
-        if self._npz_file is not None:
-            self._npz_file.close()
+    def load_split_data_file(self, file_name: str = "test.tsv"):
+        path = Path(self.base_dir, "split", file_name)
+        assert os.path.exists(path), f"path: {path} does not exist"
+        return np.genfromtxt(fname=path, delimiter="\t", skip_header=1, filling_values=-1)
+
+    def load_interaction_ratings(self, file_path: Path = Path("data/ml-100k/ml-100k.inter")) -> dict[tuple[int, int], float]:
+        if not file_path.exists():
+            raise FileNotFoundError(f"Interaction file not found: {file_path}")
+
+        ratings_map = {}
+        with open(file_path, "r") as f:
+            header = f.readline().strip().split("\t")
+            try:
+                u_idx = next(i for i, col in enumerate(header) if "user" in col.lower())
+                i_idx = next(i for i, col in enumerate(header) if "item" in col.lower())
+                r_idx = next(i for i, col in enumerate(header) if "rating" in col.lower())
+            except StopIteration:
+                raise RuntimeError(f"Couldnt load the correct headers, found: {header}")
+
+            for line_num, line in enumerate(f, start=2):
+                parts = line.strip().split("\t")
+                if len(parts) > max(u_idx, i_idx, r_idx):
+                    try:
+                        u = int(parts[u_idx])
+                        i = int(parts[i_idx])
+                        r = float(parts[r_idx])
+                        ratings_map[(u, i)] = r
+                    except ValueError:
+                        raise ValueError(f"Failed to parse interaction row {line_num}: {line}")
+
+        return ratings_map
