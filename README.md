@@ -45,13 +45,9 @@ uv sync
 
 ## Evaluate Task 2.2 and 2.3
 
-These commands consume existing exports without training or building hybrids:
-
 ```bash
 uv run python scripts/evaluate_task2.py --allow-missing
 uv run python scripts/analyze_coefficients.py
 ```
 
-Task 2.2 writes metric tables, baseline comparisons and per-user values. Task 2.3
-requires an existing Weighted coefficient JSON and its member exports; hybrid
-score exports enable contribution and fixed-weight removal diagnostics.
+Task 2.2 writes metric tables, baseline comparisons and per-user values. Task 2.3 requires an existing Weighted coefficient JSON and its member exports.
