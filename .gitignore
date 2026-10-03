@@ -7,7 +7,7 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# recbole
+recbole
 log/
 saved/
 log_tensorboard/
@@ -24,3 +24,6 @@ report/*.out
 report/*.fls
 report/*.synctex.gz
 report/*.fdb_latexmk
+
+
+docs/TASK2_EVALUATION.md
