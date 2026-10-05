@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from collections import defaultdict
 from sklearn.metrics import roc_curve, auc
 
 from source.metrics.util import RecommenderResultLoader
@@ -79,43 +78,67 @@ class RankingMetrics:
         # We use min() to not unfairly penalize users with more true items than K.
         return float(sum_precs / min(len(true_items), len(top_k_items)))
 
+    @staticmethod
+    def calculate_all_metrics(scores: np.ndarray, hidden: np.ndarray, relevant: np.ndarray, k: int = 10) -> dict[str, float]:
+        masked = np.where(hidden, -np.inf, scores)  # Replace historical item scores with -infinity
+        ranked = np.argsort(-masked, axis=1, kind="stable")[:, :k]
+        hits = np.take_along_axis(relevant, ranked, axis=1)  # True if the ranked item is in the test set
+
+        # Remove users users with no test data
+        count = relevant.sum(axis=1)
+        valid_users = count > 0
+        hits = hits[valid_users]
+        count = count[valid_users]
+
+        found = hits.any(axis=1)
+        hits_sum = hits.sum(axis=1)
+        discount = 1 / np.log2(np.arange(2, k + 2))
+        ideal = np.cumsum(discount)[np.minimum(count, k) - 1]
+        cum_hits = hits.cumsum(axis=1)
+        precisions_at_k = cum_hits / np.arange(1, k + 1)
+        sum_precisdions = (precisions_at_k * hits).sum(axis=1)
+
+        results = {
+            f"hit@{k}": found,
+            f"precision@{k}": hits_sum / k,
+            f"recall@{k}": hits_sum / count,
+            f"mrr@{k}": np.where(found, 1 / (hits.argmax(axis=1) + 1), 0),
+            f"ndcg@{k}": (hits * discount).sum(axis=1) / ideal,
+            f"f1@{k}": (2 * hits_sum) / (k + count),
+            f"map@{k}": sum_precisdions / np.minimum(count, k),
+        }
+
+        return {name: float(values.mean()) for name, values in results.items()}
+
     @classmethod
     def evaluate_file(cls, prediction_file: str = "Random.npz", k: int = 10, apply_id_offset: bool = True) -> dict[str, float]:
         with RecommenderResultLoader(base_dir="results") as loader:
-            _, _, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
-            test_pairs = loader.load_split_data_file()
+            users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
+            num_users, num_items = predicted_scores.shape
 
-        offset = 1 if apply_id_offset else 0
-        user_test_items = defaultdict(set)
-        for row in test_pairs:
-            u, i = int(row[0]) - offset, int(row[1]) - offset
-            user_test_items[u].add(i)
+            user_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(users)}
+            item_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(items)}
 
-        metrics = defaultdict(list)
-        num_items = predicted_scores.shape[1]
+            def build_dense_mask(filename: str) -> np.ndarray:
+                """Translates sparse TSV data into a full dense boolean matrix."""
+                mask = np.zeros((num_users, num_items), dtype=bool)
+                try:
+                    pairs = loader.load_split_data_file(filename)
+                    for row in pairs:
+                        if len(row) >= 2:
+                            raw_u, raw_i = int(row[0]), int(row[1])
+                            if raw_u in user_id2idx and raw_i in item_id2idx:
+                                u_idx = user_id2idx[raw_u]
+                                i_idx = item_id2idx[raw_i]
+                                mask[u_idx, i_idx] = True
+                except (FileNotFoundError, AssertionError) as e:
+                    print(f"Warning: {filename} skipped or failed. {e}")
+                return mask
 
-        for u, true_items in user_test_items.items():
-            true_items = {i for i in true_items if 0 <= i < num_items}
-            if not true_items:
-                continue
+            relevant_mask = build_dense_mask("test.tsv")
+            hidden_mask = build_dense_mask("train.tsv") | build_dense_mask("valid.tsv")
 
-            user_scores = predicted_scores[u]
-            sorted_indices = np.argsort(user_scores)[::-1]
-            top_k_items = sorted_indices[:k]
-
-            # Compute standard metrics
-            prec = cls.calculate_precision(true_items, top_k_items)
-            rec = cls.calculate_recall(true_items, top_k_items)
-
-            metrics["Hit"].append(cls.calculate_hit(true_items, top_k_items))
-            metrics["Precision"].append(prec)
-            metrics["Recall"].append(rec)
-            metrics["F1"].append(cls.calculate_f1(prec, rec))
-            metrics["MAP"].append(cls.calculate_ap(true_items, top_k_items))
-            metrics["MRR"].append(cls.calculate_mrr(true_items, top_k_items))
-            metrics["NDCG"].append(cls.calculate_ndcg(true_items, top_k_items))
-
-        return {name: float(np.mean(values)) for name, values in metrics.items()}
+        return cls.calculate_all_metrics(scores=predicted_scores, hidden=hidden_mask, relevant=relevant_mask, k=k)
 
     @classmethod
     def plot_roc_curve(cls, prediction_file: str = "Random.npz", apply_id_offset: bool = True):
