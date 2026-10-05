@@ -17,7 +17,6 @@ class EvaluationMetrics:
     @staticmethod
     def calculate_rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
         """Root Mean Squared Error"""
-        # Reuses MSE to avoid duplicating the square and mean logic
         return float(np.sqrt(EvaluationMetrics.calculate_mse(y_true, y_pred)))
 
     @classmethod
@@ -25,30 +24,36 @@ class EvaluationMetrics:
         cls, prediction_file: str = "Random.npz", metrics: Iterable[str] = ("MAE", "MSE", "RMSE"), apply_id_offset: bool = True
     ) -> dict[str, float]:
         with RecommenderResultLoader(base_dir="results") as loader:
-            _, _, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
+            users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
             test_pairs = loader.load_split_data_file()
             ground_truth_map = loader.load_interaction_ratings()
+
+        user_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(users)}
+        item_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(items)}
 
         user_indices = []
         item_indices = []
         true_scores = []
         missing_pairs = 0
-
-        # This offset allows us to map raw ID 1 -> tensor index 0.
-        offset = 1 if apply_id_offset else 0
+        unmapped_pairs = 0
 
         for row in test_pairs:
             u_raw, i_raw = int(row[0]), int(row[1])
 
             if (u_raw, i_raw) in ground_truth_map:
-                user_indices.append(u_raw - offset)
-                item_indices.append(i_raw - offset)
-                true_scores.append(ground_truth_map[(u_raw, i_raw)])
+                if u_raw in user_id2idx and i_raw in item_id2idx:
+                    user_indices.append(user_id2idx[u_raw])
+                    item_indices.append(item_id2idx[i_raw])
+                    true_scores.append(ground_truth_map[(u_raw, i_raw)])
+                else:
+                    unmapped_pairs += 1
             else:
                 missing_pairs += 1
 
         if missing_pairs > 0:
             print(f"Warning: {missing_pairs} pairs from the test split were not found in the ground truth interactions file.")
+        if unmapped_pairs > 0:
+            print(f"Warning: {unmapped_pairs} pairs from the test split were not found in the prediction matrix.")
 
         user_indices = np.array(user_indices)
         item_indices = np.array(item_indices)
@@ -76,4 +81,4 @@ class EvaluationMetrics:
         return results
 
 
-print(EvaluationMetrics.evaluate_file())
+print(EvaluationMetrics.evaluate_file(prediction_file="EASE.npz"))
