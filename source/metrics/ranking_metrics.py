@@ -141,23 +141,37 @@ class RankingMetrics:
         return cls.calculate_all_metrics(scores=predicted_scores, hidden=hidden_mask, relevant=relevant_mask, k=k)
 
     @classmethod
-    def plot_roc_curve(cls, prediction_file: str = "Random.npz", apply_id_offset: bool = True):
-        """Plots a global ROC curve and calculates global AUC"""
+    def plot_roc_curve(cls, prediction_file: str = "Random.npz"):
+        """Plots a global ROC curve and calculates global AUC."""
         with RecommenderResultLoader(base_dir="results") as loader:
-            _, _, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
-            test_pairs = loader.load_split_data_file()
+            users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
+            num_users, num_items = predicted_scores.shape
 
-        offset = 1 if apply_id_offset else 0
-        num_users, num_items = predicted_scores.shape
+            user_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(users)}
+            item_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(items)}
 
-        ground_truth = np.zeros((num_users, num_items), dtype=np.int8)
-        for row in test_pairs:
-            u, i = int(row[0]) - offset, int(row[1]) - offset
-            if 0 <= u < num_users and 0 <= i < num_items:
-                ground_truth[u, i] = 1
+            def build_dense_mask(filename: str) -> np.ndarray:
+                mask = np.zeros((num_users, num_items), dtype=bool)
+                try:
+                    pairs = loader.load_split_data_file(filename)
+                    for row in pairs:
+                        if len(row) >= 2:
+                            raw_u, raw_i = int(row[0]), int(row[1])
+                            if raw_u in user_id2idx and raw_i in item_id2idx:
+                                u_idx = user_id2idx[raw_u]
+                                i_idx = item_id2idx[raw_i]
+                                mask[u_idx, i_idx] = True
+                except (FileNotFoundError, AssertionError) as e:
+                    print(f"Warning: {filename} skipped or failed. {e}")
+                return mask
 
-        ground_truth_flat = ground_truth.flatten()
-        scores_flat = predicted_scores.flatten()
+            relevant_mask = build_dense_mask("test.tsv")
+            hidden_mask = build_dense_mask("train.tsv") | build_dense_mask("valid.tsv")
+
+        unseen_mask = ~hidden_mask
+        ground_truth_flat = relevant_mask[unseen_mask].astype(np.int8)
+        scores_flat = predicted_scores[unseen_mask]
+
         fpr, tpr, _ = roc_curve(ground_truth_flat, scores_flat)
         roc_auc = auc(fpr, tpr)
 
