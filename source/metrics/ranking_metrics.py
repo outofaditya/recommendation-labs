@@ -111,7 +111,11 @@ class RankingMetrics:
         return {name: float(values.mean()) for name, values in results.items()}
 
     @classmethod
-    def evaluate_file(cls, prediction_file: str = "Random.npz", k: int = 10, apply_id_offset: bool = True) -> dict[str, float]:
+    def _load_evaluation_data(cls, prediction_file: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Internal helper to load scores, align IDs, and build boolean matrices.
+        Returns: (predicted_scores, hidden_mask, relevant_mask)
+        """
         with RecommenderResultLoader(base_dir="results") as loader:
             users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
             num_users, num_items = predicted_scores.shape
@@ -120,7 +124,6 @@ class RankingMetrics:
             item_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(items)}
 
             def build_dense_mask(filename: str) -> np.ndarray:
-                """Translates sparse TSV data into a full dense boolean matrix."""
                 mask = np.zeros((num_users, num_items), dtype=bool)
                 try:
                     pairs = loader.load_split_data_file(filename)
@@ -128,9 +131,7 @@ class RankingMetrics:
                         if len(row) >= 2:
                             raw_u, raw_i = int(row[0]), int(row[1])
                             if raw_u in user_id2idx and raw_i in item_id2idx:
-                                u_idx = user_id2idx[raw_u]
-                                i_idx = item_id2idx[raw_i]
-                                mask[u_idx, i_idx] = True
+                                mask[user_id2idx[raw_u], item_id2idx[raw_i]] = True
                 except (FileNotFoundError, AssertionError) as e:
                     print(f"Warning: {filename} skipped or failed. {e}")
                 return mask
@@ -138,35 +139,17 @@ class RankingMetrics:
             relevant_mask = build_dense_mask("test.tsv")
             hidden_mask = build_dense_mask("train.tsv") | build_dense_mask("valid.tsv")
 
+        return predicted_scores, hidden_mask, relevant_mask
+
+    @classmethod
+    def evaluate_file(cls, prediction_file: str = "Random.npz", k: int = 10) -> dict[str, float]:
+        predicted_scores, hidden_mask, relevant_mask = cls._load_evaluation_data(prediction_file)
         return cls.calculate_all_metrics(scores=predicted_scores, hidden=hidden_mask, relevant=relevant_mask, k=k)
 
     @classmethod
     def plot_roc_curve(cls, prediction_file: str = "Random.npz"):
         """Plots a global ROC curve and calculates global AUC."""
-        with RecommenderResultLoader(base_dir="results") as loader:
-            users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
-            num_users, num_items = predicted_scores.shape
-
-            user_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(users)}
-            item_id2idx = {int(raw_id): idx for idx, raw_id in enumerate(items)}
-
-            def build_dense_mask(filename: str) -> np.ndarray:
-                mask = np.zeros((num_users, num_items), dtype=bool)
-                try:
-                    pairs = loader.load_split_data_file(filename)
-                    for row in pairs:
-                        if len(row) >= 2:
-                            raw_u, raw_i = int(row[0]), int(row[1])
-                            if raw_u in user_id2idx and raw_i in item_id2idx:
-                                u_idx = user_id2idx[raw_u]
-                                i_idx = item_id2idx[raw_i]
-                                mask[u_idx, i_idx] = True
-                except (FileNotFoundError, AssertionError) as e:
-                    print(f"Warning: {filename} skipped or failed. {e}")
-                return mask
-
-            relevant_mask = build_dense_mask("test.tsv")
-            hidden_mask = build_dense_mask("train.tsv") | build_dense_mask("valid.tsv")
+        predicted_scores, hidden_mask, relevant_mask = cls._load_evaluation_data(prediction_file)
 
         unseen_mask = ~hidden_mask
         ground_truth_flat = relevant_mask[unseen_mask].astype(np.int8)
