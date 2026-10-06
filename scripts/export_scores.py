@@ -64,9 +64,7 @@ def load(name, folder="parameters", overrides=None):
     path = Path(folder) / f"{name}.yaml"
     path = path if path.exists() else Path("parameters") / path.name
     checkpoints = {"checkpoint_dir": str(RESULTS / "checkpoints")}
-    return Config(
-        config_file_list=[str(path)], config_dict=checkpoints | (overrides or {})
-    )
+    return Config(config_file_list=[str(path)], config_dict=checkpoints | (overrides or {}))
 
 
 def fit(config, saved=True):

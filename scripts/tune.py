@@ -100,9 +100,7 @@ def tune(name, workers):
     TUNED.mkdir(parents=True, exist_ok=True)
     keys = [line.split()[0] for line in (SEARCH / f"{name}.hyper").open()]
     best = {k: rows[trials.index[0]][k] for k in keys}
-    config = (
-        yaml.safe_load(base.read_text()) | yaml.safe_load(common.read_text()) | best
-    )
+    config = yaml.safe_load(base.read_text()) | yaml.safe_load(common.read_text()) | best
     (TUNED / f"{name}.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
     print(
         name,
