@@ -24,4 +24,3 @@ def accuracy(ranked, relevant):
         "precision@10": hits.sum(axis=1) / K,
     }
     return {name: round(float(values.mean()), 4) for name, values in users.items()}
-

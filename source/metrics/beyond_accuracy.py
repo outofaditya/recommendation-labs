@@ -113,19 +113,13 @@ class BeyondAccuracyMetrics:
         user_history = [np.flatnonzero(hidden[u]) for u in np.flatnonzero(valid_users)]
         item_interaction_counts = hidden.sum(axis=0)
         total_interactions = item_interaction_counts.sum()
-        item_probabilities = (
-            item_interaction_counts / total_interactions
-            if total_interactions > 0
-            else np.zeros(scores.shape[1])
-        )
+        item_probabilities = item_interaction_counts / total_interactions if total_interactions > 0 else np.zeros(scores.shape[1])
 
         return {
             f"coverage@{k}": cls.calculate_coverage(top_k_items, scores.shape[1]),
             f"novelty@{k}": cls.calculate_novelty(top_k_items, item_probabilities),
             f"ild@{k}": cls.calculate_ild(top_k_items, distance_matrix),
-            f"serendipity@{k}": cls.calculate_serendipity(
-                top_k_items, hits, user_history, distance_matrix, alpha=1.0
-            ),
+            f"serendipity@{k}": cls.calculate_serendipity(top_k_items, hits, user_history, distance_matrix, alpha=1.0),
         }
 
     @classmethod
@@ -164,9 +158,7 @@ class BeyondAccuracyMetrics:
             internal_item_features=internal_item_features, num_items=num_items, distance_func=jaccard_distance
         )
 
-        return cls.calculate_all_metrics(
-            predicted_scores, hidden_mask, relevant_mask, distance_matrix, k
-        )
+        return cls.calculate_all_metrics(predicted_scores, hidden_mask, relevant_mask, distance_matrix, k)
 
 
 if __name__ == "__main__":

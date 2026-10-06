@@ -16,9 +16,7 @@ def pareto_mask(values):
     frontier = np.ones(len(values), dtype=bool)
     for i, row in enumerate(values):
         others = np.delete(values, i, axis=0)
-        frontier[i] = not np.any(
-            np.all(others >= row, axis=1) & np.any(others > row, axis=1)
-        )
+        frontier[i] = not np.any(np.all(others >= row, axis=1) & np.any(others > row, axis=1))
     return frontier
 
 
@@ -28,14 +26,7 @@ def markdown_table(frame):
         "| " + " | ".join(["---"] * len(frame.columns)) + " |",
     ]
     for row in frame.itertuples(index=False, name=None):
-        lines.append(
-            "| "
-            + " | ".join(
-                f"{value:.4f}" if isinstance(value, float) else str(value)
-                for value in row
-            )
-            + " |"
-        )
+        lines.append("| " + " | ".join(f"{value:.4f}" if isinstance(value, float) else str(value) for value in row) + " |")
     return "\n".join(lines)
 
 
@@ -55,9 +46,7 @@ def run(summary_path, protocol_path, output):
     summary[list(METRICS)] = values
     rankings = []
     for metric in METRICS:
-        summary[f"{metric}_rank"] = summary[metric].rank(
-            method="min", ascending=False
-        ).astype(int)
+        summary[f"{metric}_rank"] = summary[metric].rank(method="min", ascending=False).astype(int)
         category_best = summary.groupby("category")[metric].transform("max")
         summary[f"{metric}_category_leader"] = summary[metric] == category_best
         for _, row in summary.iterrows():
@@ -71,14 +60,10 @@ def run(summary_path, protocol_path, output):
                     "category_leader": row[f"{metric}_category_leader"],
                 }
             )
-    rankings = pd.DataFrame(rankings).sort_values(
-        ["metric", "global_rank", "model"], kind="stable"
-    )
+    rankings = pd.DataFrame(rankings).sort_values(["metric", "global_rank", "model"], kind="stable")
     summary["pareto_frontier"] = pareto_mask(summary[list(METRICS)].to_numpy())
     leaders = rankings[rankings["category_leader"]].copy()
-    frontier = summary[summary["pareto_frontier"]][
-        ["model", "category", *METRICS]
-    ].copy()
+    frontier = summary[summary["pareto_frontier"]][["model", "category", *METRICS]].copy()
 
     source_protocol = json.loads(protocol_path.read_text())
     protocol = {
@@ -96,9 +81,7 @@ def run(summary_path, protocol_path, output):
         "sha256": {
             str(summary_path): hashlib.sha256(summary_path.read_bytes()).hexdigest(),
             str(protocol_path): hashlib.sha256(protocol_path.read_bytes()).hexdigest(),
-            "scripts/compare_beyond_accuracy.py": hashlib.sha256(
-                Path(__file__).read_bytes()
-            ).hexdigest(),
+            "scripts/compare_beyond_accuracy.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         },
     }
 
@@ -128,9 +111,7 @@ def run(summary_path, protocol_path, output):
     rankings.to_csv(output / "metric_rankings.csv", index=False)
     leaders.to_csv(output / "category_leaders.csv", index=False)
     frontier.to_csv(output / "pareto_frontier.csv", index=False)
-    (output / "protocol.json").write_text(
-        json.dumps(protocol, indent=2, allow_nan=False) + "\n"
-    )
+    (output / "protocol.json").write_text(json.dumps(protocol, indent=2, allow_nan=False) + "\n")
     (output / "comparison.md").write_text(report)
     return summary, rankings, leaders, frontier, protocol
 
@@ -147,18 +128,10 @@ def main():
         type=Path,
         default=Path("results/task2/experiment2/protocol.json"),
     )
-    parser.add_argument(
-        "--output", type=Path, default=Path("results/task2/experiment4")
-    )
+    parser.add_argument("--output", type=Path, default=Path("results/task2/experiment4"))
     args = parser.parse_args()
-    summary, _, leaders, frontier, _ = run(
-        args.summary, args.protocol, args.output
-    )
-    print(
-        summary[["model", "category", *METRICS]].to_string(
-            index=False, float_format=lambda value: f"{value:.4f}"
-        )
-    )
+    summary, _, leaders, frontier, _ = run(args.summary, args.protocol, args.output)
+    print(summary[["model", "category", *METRICS]].to_string(index=False, float_format=lambda value: f"{value:.4f}"))
     print(f"Category leaders: {len(leaders)}; Pareto-frontier models: {len(frontier)}")
     print(f"Saved beyond-accuracy comparison to {args.output}")
 

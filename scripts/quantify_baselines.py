@@ -18,14 +18,7 @@ def markdown_table(frame):
         "| " + " | ".join(["---"] * len(frame.columns)) + " |",
     ]
     for row in frame.itertuples(index=False, name=None):
-        lines.append(
-            "| "
-            + " | ".join(
-                f"{value:.2f}" if isinstance(value, float) else str(value)
-                for value in row
-            )
-            + " |"
-        )
+        lines.append("| " + " | ".join(f"{value:.2f}" if isinstance(value, float) else str(value) for value in row) + " |")
     return "\n".join(lines)
 
 
@@ -69,12 +62,8 @@ def run(summary_path, protocol_path, output):
                         "model_value": float(target[metric]),
                         "baseline_value": baseline_value,
                         "absolute_difference": difference,
-                        "relative_change": difference / baseline_value
-                        if baseline_value != 0
-                        else None,
-                        "relative_change_percent": 100 * difference / baseline_value
-                        if baseline_value != 0
-                        else None,
+                        "relative_change": difference / baseline_value if baseline_value != 0 else None,
+                        "relative_change_percent": 100 * difference / baseline_value if baseline_value != 0 else None,
                     }
                 )
     comparisons = pd.DataFrame(rows)
@@ -89,9 +78,7 @@ def run(summary_path, protocol_path, output):
 
     protocol_source = json.loads(protocol_path.read_text())
     warnings = list(protocol_source.get("warnings", []))
-    warnings.append(
-        "Relative changes can be very large when a baseline is near zero; interpret them with the absolute difference."
-    )
+    warnings.append("Relative changes can be very large when a baseline is near zero; interpret them with the absolute difference.")
     protocol = {
         "experiment": "Task 2.2 experiment 3: improvement over naive baselines",
         "status": "complete_with_baseline_warning" if warnings else "complete",
@@ -135,9 +122,7 @@ def run(summary_path, protocol_path, output):
     output.mkdir(parents=True, exist_ok=True)
     comparisons.to_csv(output / "baseline_comparison.csv", index=False)
     primary.to_csv(output / "ndcg_summary.csv", index=False)
-    (output / "protocol.json").write_text(
-        json.dumps(protocol, indent=2, allow_nan=False) + "\n"
-    )
+    (output / "protocol.json").write_text(json.dumps(protocol, indent=2, allow_nan=False) + "\n")
     (output / "comparison.md").write_text(report)
     return comparisons, primary, protocol
 
@@ -154,18 +139,11 @@ def main():
         type=Path,
         default=Path("results/task2/experiment2/protocol.json"),
     )
-    parser.add_argument(
-        "--output", type=Path, default=Path("results/task2/experiment3")
-    )
+    parser.add_argument("--output", type=Path, default=Path("results/task2/experiment3"))
     args = parser.parse_args()
-    comparisons, primary, protocol = run(
-        args.summary, args.protocol, args.output
-    )
+    comparisons, primary, protocol = run(args.summary, args.protocol, args.output)
     print(primary.to_string(index=False, float_format=lambda value: f"{value:.2f}"))
-    print(
-        f"Saved {len(comparisons)} baseline comparisons across "
-        f"{len(protocol['metrics'])} metrics to {args.output}"
-    )
+    print(f"Saved {len(comparisons)} baseline comparisons across {len(protocol['metrics'])} metrics to {args.output}")
 
 
 if __name__ == "__main__":

@@ -53,8 +53,7 @@ def load_item_features(path, items):
     if frame.shape[1] < 4 or frame.empty:
         raise ValueError(f"Empty or malformed item metadata: {path}")
     features_by_id = {
-        item_id: genres.split() if isinstance(genres, str) else []
-        for item_id, genres in zip(frame.iloc[:, 0], frame.iloc[:, 3], strict=True)
+        item_id: genres.split() if isinstance(genres, str) else [] for item_id, genres in zip(frame.iloc[:, 0], frame.iloc[:, 3], strict=True)
     }
     missing = [item for item in items if item not in features_by_id]
     if missing:
@@ -79,17 +78,11 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
             if not eligible.any() or np.any((~hidden[eligible]).sum(axis=1) < k):
                 raise ValueError("No test users or fewer than k eligible items for a test user")
             item_features = load_item_features(items_path, items)
-            distance_matrix = BeyondAccuracyMetrics.build_genre_distance_matrix(
-                item_features, len(items), jaccard_distance
-            )
+            distance_matrix = BeyondAccuracyMetrics.build_genre_distance_matrix(item_features, len(items), jaccard_distance)
         elif not (np.array_equal(users, reference[0]) and np.array_equal(items, reference[1])):
             raise ValueError(f"User/item ID order differs for {name}")
         values = RankingMetrics.calculate_all_metrics(scores, hidden, masks["test"], k)
-        values.update(
-            BeyondAccuracyMetrics.calculate_all_metrics(
-                scores, hidden, masks["test"], distance_matrix, k
-            )
-        )
+        values.update(BeyondAccuracyMetrics.calculate_all_metrics(scores, hidden, masks["test"], distance_matrix, k))
         rows.append({"model": name, **{f"{m}@{k}": values[f"{m}@{k}"] for m in METRICS}})
         hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
         if name in ("Random", "Pop"):
@@ -114,18 +107,24 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
     protocol = {
         "experiment": "Task 2.2 experiment 1: tuned individual models",
         "status": "complete_with_baseline_warning" if warnings else "complete",
-        "models": MODELS, "k": k, "users_evaluated": int(eligible.sum()), "catalog_size": len(items),
+        "models": MODELS,
+        "k": k,
+        "users_evaluated": int(eligible.sum()),
+        "catalog_size": len(items),
         "split_interactions": {name: int(mask.sum()) for name, mask in masks.items()},
         "selection": "All nine fixed Task 1 tuned individuals plus Random and Pop; no test-based selection or retraining",
         "relevance": "Binary test interaction, irrespective of rating value",
-        "hidden": ["train", "valid"], "ties": "Stable exported item-column order",
+        "hidden": ["train", "valid"],
+        "ties": "Stable exported item-column order",
         "aggregation": "Macro mean over users with at least one test interaction",
         "metrics": {
             "accuracy": "Task 2.1 RankingMetrics.calculate_all_metrics; AP denominator min(test positives, K); per-user F1",
             "beyond_accuracy": "Task 2.1 BeyondAccuracyMetrics: catalog coverage; self-information novelty from hidden interaction frequency; genre-Jaccard ILD; relevance-weighted genre-distance serendipity",
         },
         "uncertainty": "One saved split and one export per model; no significance or multi-seed claims",
-        "baseline_diagnostics": diagnostics, "warnings": warnings, "sha256": hashes,
+        "baseline_diagnostics": diagnostics,
+        "warnings": warnings,
+        "sha256": hashes,
     }
     columns = list(summary.columns)
     table = ["| " + " | ".join(columns) + " |", "| " + " | ".join(["---"] * len(columns)) + " |"]

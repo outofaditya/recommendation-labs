@@ -48,9 +48,7 @@ def correlation_rows(frame, scope):
 def frontier_rows(frame, scope):
     rows = []
     for metric in BEYOND:
-        frontier = frame[
-            pareto_mask(frame[[ACCURACY, metric]].to_numpy())
-        ].sort_values(metric, kind="stable")
+        frontier = frame[pareto_mask(frame[[ACCURACY, metric]].to_numpy())].sort_values(metric, kind="stable")
         for _, row in frontier.iterrows():
             rows.append(
                 {
@@ -95,9 +93,7 @@ def save_figure(frame, frontiers, path):
                 alpha=0.85,
                 label=category.title(),
             )
-        frontier = non_baseline_frontiers[
-            non_baseline_frontiers["beyond_accuracy_metric"] == metric
-        ].sort_values(ACCURACY)
+        frontier = non_baseline_frontiers[non_baseline_frontiers["beyond_accuracy_metric"] == metric].sort_values(ACCURACY)
         axis.plot(
             frontier[ACCURACY],
             frontier[metric],
@@ -106,11 +102,7 @@ def save_figure(frame, frontiers, path):
             linestyle="--",
             alpha=0.65,
         )
-        endpoints = (
-            {frontier.iloc[0]["model"], frontier.iloc[-1]["model"]}
-            if len(frontier)
-            else set()
-        )
+        endpoints = {frontier.iloc[0]["model"], frontier.iloc[-1]["model"]} if len(frontier) else set()
         annotated = endpoints | {"Random", "Pop"}
         for _, row in frame[frame["model"].isin(annotated)].iterrows():
             place_left = row[ACCURACY] > frame[ACCURACY].quantile(0.9)
@@ -146,14 +138,7 @@ def markdown_table(frame):
         "| " + " | ".join(["---"] * len(frame.columns)) + " |",
     ]
     for row in frame.itertuples(index=False, name=None):
-        lines.append(
-            "| "
-            + " | ".join(
-                f"{value:.3f}" if isinstance(value, float) else str(value)
-                for value in row
-            )
-            + " |"
-        )
+        lines.append("| " + " | ".join(f"{value:.3f}" if isinstance(value, float) else str(value) for value in row) + " |")
     return "\n".join(lines)
 
 
@@ -175,21 +160,15 @@ def run(summary_path, protocol_path, output):
         "all_models": frame,
         "non_baselines": frame[frame["category"] != "baseline"],
     }
-    correlations = pd.DataFrame(
-        [row for scope, subset in scopes.items() for row in correlation_rows(subset, scope)]
-    )
+    correlations = pd.DataFrame([row for scope, subset in scopes.items() for row in correlation_rows(subset, scope)])
     if not np.isfinite(correlations[["pearson", "spearman"]].to_numpy()).all():
         raise ValueError("Correlations are undefined; metrics must vary within each scope")
-    frontiers = pd.DataFrame(
-        [row for scope, subset in scopes.items() for row in frontier_rows(subset, scope)]
-    )
+    frontiers = pd.DataFrame([row for scope, subset in scopes.items() for row in frontier_rows(subset, scope)])
 
     reference = frame.loc[frame[ACCURACY].idxmax()]
     deltas = frame.copy()
     for metric in (ACCURACY, *BEYOND):
-        deltas[f"{metric}_delta_vs_{reference['model']}"] = (
-            deltas[metric] - reference[metric]
-        )
+        deltas[f"{metric}_delta_vs_{reference['model']}"] = deltas[metric] - reference[metric]
 
     source_protocol = json.loads(protocol_path.read_text())
     protocol = {
@@ -207,9 +186,7 @@ def run(summary_path, protocol_path, output):
         "sha256": {
             str(summary_path): hashlib.sha256(summary_path.read_bytes()).hexdigest(),
             str(protocol_path): hashlib.sha256(protocol_path.read_bytes()).hexdigest(),
-            "scripts/analyze_tradeoffs.py": hashlib.sha256(
-                Path(__file__).read_bytes()
-            ).hexdigest(),
+            "scripts/analyze_tradeoffs.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         },
     }
 
@@ -219,9 +196,7 @@ def run(summary_path, protocol_path, output):
     correlations.to_csv(output / "correlations.csv", index=False)
     frontiers.to_csv(output / "pairwise_frontiers.csv", index=False)
     deltas.to_csv(output / "reference_deltas.csv", index=False)
-    (output / "protocol.json").write_text(
-        json.dumps(protocol, indent=2, allow_nan=False) + "\n"
-    )
+    (output / "protocol.json").write_text(json.dumps(protocol, indent=2, allow_nan=False) + "\n")
 
     correlation_table = correlations.rename(
         columns={
@@ -264,13 +239,9 @@ def main():
         type=Path,
         default=Path("results/task2/experiment2/protocol.json"),
     )
-    parser.add_argument(
-        "--output", type=Path, default=Path("results/task2/experiment5")
-    )
+    parser.add_argument("--output", type=Path, default=Path("results/task2/experiment5"))
     args = parser.parse_args()
-    _, correlations, frontiers, _, _ = run(
-        args.summary, args.protocol, args.output
-    )
+    _, correlations, frontiers, _, _ = run(args.summary, args.protocol, args.output)
     print(correlations.to_string(index=False, float_format=lambda value: f"{value:.3f}"))
     counts = frontiers.groupby(["scope", "beyond_accuracy_metric"]).size()
     print("Pairwise frontier sizes:\n" + counts.to_string())
