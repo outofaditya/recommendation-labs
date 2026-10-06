@@ -1,6 +1,4 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import roc_curve, auc
 
 from source.metrics.util import RecommenderDataLoader
 
@@ -149,6 +147,9 @@ class RankingMetrics:
     @classmethod
     def plot_roc_curve(cls, prediction_file: str = "Random.npz"):
         """Plots a global ROC curve and calculates global AUC."""
+        import matplotlib.pyplot as plt
+        from sklearn.metrics import roc_curve, auc
+
         predicted_scores, hidden_mask, relevant_mask = cls._load_evaluation_data(prediction_file)
 
         unseen_mask = ~hidden_mask
@@ -171,5 +172,6 @@ class RankingMetrics:
         plt.show()
 
 
-print(RankingMetrics.evaluate_file(prediction_file="EASE.npz"))
-RankingMetrics.plot_roc_curve(prediction_file="EASE.npz")
+if __name__ == "__main__":
+    print(RankingMetrics.evaluate_file(prediction_file="EASE.npz"))
+    RankingMetrics.plot_roc_curve(prediction_file="EASE.npz")

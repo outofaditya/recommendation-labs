@@ -24,3 +24,8 @@ report/*.out
 report/*.fls
 report/*.synctex.gz
 report/*.fdb_latexmk
+
+
+#Task2.2
+tests/*
+
