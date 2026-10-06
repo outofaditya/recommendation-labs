@@ -52,6 +52,8 @@ FISM reaches the widest catalogue coverage (0.3722), and EASE has the highest se
 Random's extreme novelty (12.6636) does not imply useful recommendations: its serendipity is only 0.0043 as novelty receives no relevance requirement whereas serendipity does. 
 
 Pop combines very low coverage (0.0357) with high ILD (0.8151); one repeated popular list can span several genres while covering little of the catalogue. BPR exceeds NeuMF on every accuracy metric, but NeuMF provides broader coverage and greater novelty. 
+
+JC: EASE is the strongest individual-model accuracy benchmark, but different models each have their strengths in coverage, novelty, and serendipity.
 ```
 **Limitations.** These are single-split results, without significance testing. 
 
@@ -116,7 +118,7 @@ Cascade retrieves more relevant items than EASE but ranks them less favourably b
 Switching, Augmentation, and Meta-Level fall below EASE on every accuracy metric; 
 Augmentation and Meta-Level also narrow catalogue coverage. 
 
-jiayue: hybrid approach may not automatically lead to improvement. Weighted and Feature Combination methods perform best probably as they preserve the complementary signals from multiple models, whereas structures such as Switching and Augmentation may lose information from the stronger model.
+JC: hybrid approach may not automatically lead to improvement. Weighted and Feature Combination methods perform best probably as they preserve the complementary signals from multiple models, whereas structures such as Switching and Augmentation may lose information from the stronger model.
 ```
 
 **Limitations.** Results describe one saved local split without significance testing or repeated training. Coefficient analysis remains a separate experiment.
@@ -172,6 +174,10 @@ Beyond accuracy exposes different behaviour.
 Feature Combination improves Pop's coverage by 698.3%, novelty by 6.8%, and serendipity by 170.4%, but its ILD is 1.4% lower. 
 
 Thus, the strongest hybrid is broader, more novel, and more likely to produce relevant unexpected items than Pop, while Pop's single repeated ranking happens to contain a slightly more genre-diverse set of ten movies.
+
+JC: All tuned models outperform both Random and Pop on accuracy; 
+however, the extremely large percentage gains over Random are merely a mathematical artifact and should not be treated as statistical evidence. 
+In terms of beyond-accuracy, the strongest hybrid is broader, more novel, and more serendipitous than Pop, but its ILD is slightly lower, indicating a mild trade-off between accuracy and diversity, and evaluation must be conducted metric by metric, with an appropriate reference, and by examining both absolute differences and relative changes.
 ```
 
 **Limitations.** These are descriptive differences on one split, without confidence intervals or significance tests. 
