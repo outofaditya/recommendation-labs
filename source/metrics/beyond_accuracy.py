@@ -84,6 +84,45 @@ class BeyondAccuracyMetrics:
         return float(len(unique_recommended) / total_catalog_size)
 
     @classmethod
+    def calculate_all_metrics(
+        cls,
+        scores: np.ndarray,
+        hidden: np.ndarray,
+        relevant: np.ndarray,
+        distance_matrix: np.ndarray,
+        k: int = 10,
+    ) -> dict[str, float]:
+        """Evaluate beyond-accuracy metrics on aligned score and mask arrays."""
+        if k < 1:
+            raise ValueError("k must be positive")
+        if scores.shape != hidden.shape or scores.shape != relevant.shape:
+            raise ValueError("scores, hidden and relevant must have the same shape")
+        if distance_matrix.shape != (scores.shape[1], scores.shape[1]):
+            raise ValueError("distance matrix must be square and aligned with score items")
+
+        masked_scores = np.where(hidden, -np.inf, scores)
+        top_k_items = np.argsort(-masked_scores, axis=1, kind="stable")[:, :k]
+        hits = np.take_along_axis(relevant, top_k_items, axis=1)
+
+        valid_users = relevant.sum(axis=1) > 0
+        top_k_items = top_k_items[valid_users]
+        hits = hits[valid_users]
+        if not len(top_k_items):
+            raise ValueError("No users with relevant test interactions")
+
+        user_history = [np.flatnonzero(hidden[u]) for u in np.flatnonzero(valid_users)]
+        item_interaction_counts = hidden.sum(axis=0)
+        total_interactions = item_interaction_counts.sum()
+        item_probabilities = item_interaction_counts / total_interactions if total_interactions > 0 else np.zeros(scores.shape[1])
+
+        return {
+            f"coverage@{k}": cls.calculate_coverage(top_k_items, scores.shape[1]),
+            f"novelty@{k}": cls.calculate_novelty(top_k_items, item_probabilities),
+            f"ild@{k}": cls.calculate_ild(top_k_items, distance_matrix),
+            f"serendipity@{k}": cls.calculate_serendipity(top_k_items, hits, user_history, distance_matrix, alpha=1.0),
+        }
+
+    @classmethod
     def evaluate_file(cls, prediction_file: str = "Random.npz", k: int = 10) -> dict[str, float]:
         with RecommenderDataLoader(base_dir="results") as loader:
             users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
@@ -115,29 +154,12 @@ class BeyondAccuracyMetrics:
             if raw_id in item_map:
                 internal_item_features[idx] = item_map[raw_id][2]
 
-        masked_scores = np.where(hidden_mask, -np.inf, predicted_scores)
-        top_k_items = np.argsort(-masked_scores, axis=1, kind="stable")[:, :k]
-        hits = np.take_along_axis(relevant_mask, top_k_items, axis=1)
-
-        valid_users = relevant_mask.sum(axis=1) > 0
-        top_k_items = top_k_items[valid_users]
-        hits = hits[valid_users]
-
-        user_history = [np.where(hidden_mask[u])[0] for u in range(num_users) if valid_users[u]]
-        item_interaction_counts = hidden_mask.sum(axis=0)
-        total_interactions = item_interaction_counts.sum()
-        item_probabilities = item_interaction_counts / total_interactions if total_interactions > 0 else np.zeros(num_items)
-
         distance_matrix = cls.build_genre_distance_matrix(
             internal_item_features=internal_item_features, num_items=num_items, distance_func=jaccard_distance
         )
 
-        return {
-            f"coverage@{k}": cls.calculate_coverage(top_k_items, num_items),
-            f"novelty@{k}": cls.calculate_novelty(top_k_items, item_probabilities),
-            f"ild@{k}": cls.calculate_ild(top_k_items, distance_matrix),
-            f"serendipity@{k}": cls.calculate_serendipity(top_k_items, hits, user_history, distance_matrix, alpha=1.0),
-        }
+        return cls.calculate_all_metrics(predicted_scores, hidden_mask, relevant_mask, distance_matrix, k)
 
 
-print(BeyondAccuracyMetrics.evaluate_file(prediction_file="Random.npz"))
+if __name__ == "__main__":
+    print(BeyondAccuracyMetrics.evaluate_file(prediction_file="Random.npz"))
