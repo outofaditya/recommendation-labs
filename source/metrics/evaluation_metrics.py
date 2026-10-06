@@ -1,6 +1,6 @@
 import numpy as np
 from collections.abc import Iterable
-from util import RecommenderResultLoader
+from util import RecommenderDataLoader
 
 
 class EvaluationMetrics:
@@ -23,7 +23,7 @@ class EvaluationMetrics:
     def evaluate_file(
         cls, prediction_file: str = "Random.npz", metrics: Iterable[str] = ("MAE", "MSE", "RMSE"), apply_id_offset: bool = True
     ) -> dict[str, float]:
-        with RecommenderResultLoader(base_dir="results") as loader:
+        with RecommenderDataLoader(base_dir="results") as loader:
             users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
             test_pairs = loader.load_split_data_file()
             ground_truth_map = loader.load_interaction_ratings()

@@ -28,7 +28,7 @@ jobs:
         run: |
           bad=0
           while IFS= read -r msg; do
-            if ! echo "$msg" | grep -Eq "^(feat|fix|docs|refactor|test|chore)\(${SCOPE}\): [a-z0-9].+$"; then
+            if ! echo "$msg" | grep -Eq "^(feat|fix|docs|refactor|test|chore)\(${SCOPE}\):? [a-z0-9].+$"; then
               echo "::error::Bad commit message: $msg"
               bad=1
             fi

@@ -6,7 +6,7 @@ from typing import Any
 from numpy.lib.npyio import NpzFile
 
 
-class RecommenderResultLoader:
+class RecommenderDataLoader:
     """
     A resource-managed loader for recommender system evaluation outputs.
     Supports lazy loading of large recommendation matrices.
@@ -50,7 +50,7 @@ class RecommenderResultLoader:
         except OSError as e:
             raise RuntimeError(f"Failed to load numpy arrays safely: {e}")
 
-    def load_metrics(self, json_filename) -> dict[str, Any]:
+    def load_metrics_recbole(self, json_filename) -> dict[str, Any]:
         """
         Loads pre-calculated metrics from a JSON file.
         """
@@ -70,7 +70,7 @@ class RecommenderResultLoader:
         assert os.path.exists(path), f"path: {path} does not exist"
         return np.genfromtxt(fname=path, delimiter="\t", skip_header=1, filling_values=-1)
 
-    def load_interaction_ratings(self, file_path: Path = Path("data/ml-100k/ml-100k.inter")) -> dict[tuple[int, int], float]:
+    def load_interaction_ratings(self, file_path: Path = Path("data", "ml-100k", "ml-100k.inter")) -> dict[tuple[int, int], float]:
         if not file_path.exists():
             raise FileNotFoundError(f"Interaction file not found: {file_path}")
 
@@ -96,3 +96,69 @@ class RecommenderResultLoader:
                         raise ValueError(f"Failed to parse interaction row {line_num}: {line}")
 
         return ratings_map
+
+    def load_item_info(self, file_path: Path = Path("data", "ml-100k", "ml-100k.item")) -> dict[int, tuple[str, int, list[str]]]:
+        """
+        Returns the item info for the dataset. returns: item id -> (movie title, release year, list of genres)
+        """
+        if not file_path.exists():
+            raise FileNotFoundError(f"Item file not found: {file_path}")
+
+        item_map = {}
+        with open(file_path, "r", encoding="utf-8") as f:
+            _ = f.readline()  # skip the header
+
+            for line_num, line in enumerate(f, start=2):
+                parts = line.strip("\n").split("\t")
+
+                if len(parts) < 4:
+                    print(f"Warning: Item file row {line_num} is incomplete. Skipping., row contained: {parts}")
+                    continue
+
+                try:
+                    item_id = int(parts[0])
+                    title = parts[1]
+
+                    # Default year is 0 for some malformed instances
+                    year_str = parts[2].strip()
+                    year = int(year_str) if year_str.isdigit() else 0
+
+                    genres = parts[3].split()
+                    item_map[item_id] = (title, year, genres)
+
+                except ValueError as e:
+                    print(f"Warning: Type conversion failed on item row {line_num}: {e}")
+
+        return item_map
+
+    def load_user_info(self, file_path: Path = Path("data", "ml-100k", "ml-100k.user")) -> dict[int, tuple[int, str, str, str]]:
+        """
+        Returns: user_id -> (age, gender, occupation, zip_code)
+        """
+        if not file_path.exists():
+            raise FileNotFoundError(f"User file not found: {file_path}")
+
+        user_map = {}
+        with open(file_path, "r", encoding="utf-8") as f:
+            _ = f.readline()  # skip header
+
+            for line_num, line in enumerate(f, start=2):
+                parts = line.strip("\n").split("\t")
+
+                if len(parts) < 5:
+                    print(f"Warning: User file row {line_num} is incomplete. Skipping. line contained: {parts}")
+                    continue
+
+                try:
+                    user_id = int(parts[0])
+                    age = int(parts[1])
+                    gender = parts[2]
+                    occupation = parts[3]
+                    zip_code = parts[4]
+
+                    user_map[user_id] = (age, gender, occupation, zip_code)
+
+                except ValueError as e:
+                    print(f"Warning: Type conversion failed on user row {line_num}: {e}")
+
+        return user_map

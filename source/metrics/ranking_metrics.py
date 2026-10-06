@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import roc_curve, auc
 
-from source.metrics.util import RecommenderResultLoader
+from source.metrics.util import RecommenderDataLoader
 
 
 class RankingMetrics:
@@ -116,7 +116,7 @@ class RankingMetrics:
         Internal helper to load scores, align IDs, and build boolean matrices.
         Returns: (predicted_scores, hidden_mask, relevant_mask)
         """
-        with RecommenderResultLoader(base_dir="results") as loader:
+        with RecommenderDataLoader(base_dir="results") as loader:
             users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
             num_users, num_items = predicted_scores.shape
 
