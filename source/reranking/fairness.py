@@ -1,17 +1,7 @@
 import numpy as np
 from source.reranking.greedy import greedy
-from source.reranking.calibration import calibrated, js
-
-HEAD, TAIL = 0.2, 0.8
-
-
-# head movies take the first fifth of all interactions and tail movies the last fifth
-def tiers(hidden):
-    counts = hidden.sum(axis=0)
-    order = np.argsort(-counts, kind="stable")
-    tier = np.empty(len(counts), dtype=int)
-    tier[order] = np.searchsorted([HEAD, TAIL], np.cumsum(counts[order]) / counts.sum())
-    return tier
+from source.metrics.societal import js, tiers
+from source.reranking.calibration import calibrated
 
 
 # item side xquad where a movie gains by covering the tail or the rest as much as the user's history does
