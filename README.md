@@ -41,3 +41,5 @@ uv sync
 | 1.5 – Hybrid Tuning                      | `uv run python scripts/tune_hybrids.py`   | Scores and test metrics of the seven tuned hybrids in `results/hybrid/`                                                 |
 | **Task 2 — Evaluation of Effectiveness** |                                           |                                                                                                                         |
 | **Task 3 — Societal Aspects**            |                                           |                                                                                                                         |
+| 3.1 – Re-Rankers                         | `uv run python scripts/rerank.py`         | Four re-rankers on three models for every lambda on validation and the chosen one on test in `results/rerank/`          |
+| 3.2 – Re-Ranked Evaluation               | `uv run python scripts/tradeoff.py`       | Accuracy and beyond-accuracy per lambda in `results/rerank/curves.csv` and before and after on test in `test.csv`       |
