@@ -8,8 +8,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from scripts.compare_individuals import METRICS, MODELS, load_item_features, load_masks, load_predictions
+from scripts.task22.compare_individuals import METRICS, MODELS, PREDICTION_METRICS, load_item_features, load_masks, load_predictions
 from source.metrics.beyond_accuracy import BeyondAccuracyMetrics, jaccard_distance
+from source.metrics.evaluation_metrics import EvaluationMetrics
 from source.metrics.ranking_metrics import RankingMetrics
 
 HYBRIDS = [f"Tuned{name}" for name in ("Weighted", "Mixed", "Cascade", "Switching", "Combination", "Augmentation", "Metalevel")]
@@ -22,10 +23,17 @@ def markdown_table(frame):
     return "\n".join(lines)
 
 
-def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
+def run(
+    results,
+    output,
+    k=10,
+    items_path=Path("data/ml-100k/ml-100k.item"),
+    interactions_path=Path("data/ml-100k/ml-100k.inter"),
+):
     if k < 1:
         raise ValueError("k must be positive")
-    columns = [f"{metric}@{k}" for metric in METRICS]
+    ranking_columns = [f"{metric}@{k}" for metric in METRICS]
+    columns = ranking_columns + PREDICTION_METRICS
     rows, diagnostics, hashes, warnings = [], {}, {}, []
     reference = None
     for name in MODELS + HYBRIDS:
@@ -41,6 +49,8 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
                 raise ValueError("No users with test interactions")
             item_features = load_item_features(items_path, items)
             distance_matrix = BeyondAccuracyMetrics.build_genre_distance_matrix(item_features, len(items), jaccard_distance)
+            test_pairs = pd.read_csv(results / "split/test.tsv", sep="\t", dtype=str)
+            ratings = EvaluationMetrics.load_interaction_ratings(interactions_path)
         elif not (np.array_equal(users, reference[0]) and np.array_equal(items, reference[1])):
             raise ValueError(f"User/item ID order differs for {name}")
         available = np.isfinite(scores) & ~hidden
@@ -49,9 +59,14 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
             raise ValueError(f"{name}: fewer than k finite eligible candidates for a test user (minimum {counts.min()}, k={k})")
         values = RankingMetrics.calculate_all_metrics(scores, hidden, masks["test"], k)
         values.update(BeyondAccuracyMetrics.calculate_all_metrics(scores, hidden, masks["test"], distance_matrix, k))
+        prediction_values, prediction_diagnostics = EvaluationMetrics.calculate_test_metrics(users, items, scores, test_pairs, ratings)
         group = "hybrid" if hybrid else ("baseline" if name in ("Random", "Pop") else "individual")
-        rows.append({"model": name, "category": group, **{c: values[c] for c in columns}})
-        diagnostics[name] = {"minimum_candidates": int(counts.min()), "maximum_candidates": int(counts.max())}
+        rows.append({"model": name, "category": group, **{c: values[c] for c in ranking_columns}, **prediction_values})
+        diagnostics[name] = {
+            "minimum_candidates": int(counts.min()),
+            "maximum_candidates": int(counts.max()),
+            "prediction": prediction_diagnostics,
+        }
         if name == "Random":
             distinct = len(np.unique(scores, axis=0))
             diagnostics[name]["distinct_score_rows"] = distinct
@@ -64,12 +79,14 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         path = results / "split" / f"{name}.tsv"
         hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     hashes[str(items_path)] = hashlib.sha256(items_path.read_bytes()).hexdigest()
-    root = Path(__file__).resolve().parents[1]
+    hashes[str(interactions_path)] = hashlib.sha256(interactions_path.read_bytes()).hexdigest()
+    root = Path(__file__).resolve().parents[2]
     for relative in (
-        "scripts/compare_hybrids.py",
-        "scripts/compare_individuals.py",
+        "scripts/task22/compare_hybrids.py",
+        "scripts/task22/compare_individuals.py",
         "source/metrics/ranking_metrics.py",
         "source/metrics/beyond_accuracy.py",
+        "source/metrics/evaluation_metrics.py",
     ):
         hashes[relative] = hashlib.sha256((root / relative).read_bytes()).hexdigest()
     summary = pd.DataFrame(rows)
@@ -101,11 +118,22 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         "users_evaluated": int(eligible.sum()),
         "catalog_size": len(items),
         "split_interactions": {name: int(mask.sum()) for name, mask in masks.items()},
-        "relevance": "Binary test interaction irrespective of rating; hide train and validation",
+        "relevance": "Binary test interaction irrespective of rating for ranking metrics; hide train and validation",
+        "rating_prediction": {
+            "target": "Original explicit rating from ml-100k.inter for each test user-item pair",
+            "metrics": "MAE and MSE over finite predicted scores; lower is better",
+            "ordering": "Prediction metrics do not use recommendation rank or K",
+            "unavailable_predictions": "Non-finite hybrid candidate scores are excluded and reported in diagnostics",
+        },
         "aggregation": "Macro mean over the same users with test interactions",
         "metrics": {
-            "accuracy": "Task 2.1 RankingMetrics.calculate_all_metrics; AP denominator min(test positives, K); per-user F1",
-            "beyond_accuracy": "Task 2.1 BeyondAccuracyMetrics: catalog coverage; self-information novelty from hidden interaction frequency; genre-Jaccard ILD; relevance-weighted genre-distance serendipity",
+            "ranking_accuracy": ranking_columns,
+            "beyond_accuracy": [f"{metric}@{k}" for metric in ("coverage", "novelty", "ild", "serendipity")],
+            "rating_prediction": PREDICTION_METRICS,
+            "definitions": {
+                "ranking_accuracy": "Task 2.1 RankingMetrics.calculate_all_metrics; AP denominator min(test positives, K); per-user F1",
+                "beyond_accuracy": "Task 2.1 BeyondAccuracyMetrics: catalog coverage; self-information novelty from hidden interaction frequency; genre-Jaccard ILD; relevance-weighted genre-distance serendipity",
+            },
         },
         "ties": "Stable exported item-column order",
         "candidates": "Preserve each hybrid's exported candidate pool; negative infinity excludes an item; require at least K finite unseen items",
@@ -128,7 +156,7 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
     beating = winners[winners[columns[0]] > best[columns[0]]].model.tolist()
     report = (
         "# Task 2.2 — Experiment 2: tuned hybrids versus individuals\n\n"
-        f"Evaluated all 18 fixed local exports on {int(eligible.sum())} test users at K={k}, using the Task 2.1 accuracy and beyond-accuracy metrics. "
+        f"Evaluated all 18 fixed local exports on {int(eligible.sum())} test users at K={k}. Ranking and beyond-accuracy metrics use the Task 2.1 definitions; MAE and MSE compare finite test-pair predictions with original explicit ratings and do not use recommendation order. "
         "Train and validation interactions are hidden; hybrid candidate restrictions are preserved. No training or tuning was performed.\n\n"
         + markdown_table(summary)
         + "\n\n## Hybrid comparison\n\n"
@@ -140,11 +168,11 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         + "Hybridisation therefore does not improve every design equally. Weighted blends member scores, Mixed fuses ranks, and Combination learns from scores and side features; "
         "their aggregate results should be distinguished from Cascade's restricted shortlist and Switching's choice of one member per user group. "
         "These mechanisms motivate explanations but this comparison alone does not establish their causal effects. "
-        "Accuracy and beyond-accuracy metrics are reported because ranking quality, catalogue reach, novelty, list diversity and serendipity need not move together.\n\n"
+        "Accuracy and beyond-accuracy metrics are reported because ranking quality, catalogue reach, novelty, list diversity and serendipity need not move together. MAE and MSE are separate pointwise rating-prediction errors; their lower-is-better values use only finite candidate-pool predictions and therefore must be read with prediction coverage and score-scale limitations.\n\n"
         + "## Limits\n\n"
         + "\n".join(f"- {v}" for v in protocol["limitations"] + warnings)
         + "\n\nDifferences are descriptive, without significance tests. The all-pairs CSV compares every hybrid against every individual, avoiding reliance on a single reference.\n\n"
-        + "Reproduce from the repository root: `uv run python -m scripts.compare_hybrids`\n"
+        + "Reproduce from the repository root: `uv run python -m scripts.task22.compare_hybrids`\n"
     )
     output.mkdir(parents=True, exist_ok=True)
     summary.to_csv(output / "summary.csv", index=False)
@@ -159,9 +187,10 @@ def main():
     parser.add_argument("--results", type=Path, default=Path("results"))
     parser.add_argument("--output", type=Path, default=Path("results/task2/experiment2"))
     parser.add_argument("--items", type=Path, default=Path("data/ml-100k/ml-100k.item"))
+    parser.add_argument("--interactions", type=Path, default=Path("data/ml-100k/ml-100k.inter"))
     parser.add_argument("--k", type=int, default=10)
     args = parser.parse_args()
-    summary, protocol = run(args.results, args.output, args.k, args.items)
+    summary, protocol = run(args.results, args.output, args.k, args.items, args.interactions)
     print(summary.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
     for warning in protocol["warnings"]:
         print(f"WARNING: {warning}")

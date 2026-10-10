@@ -10,6 +10,7 @@ import pandas as pd
 
 BASELINES = ("Random", "Pop")
 IDENTIFIERS = ("model", "category")
+LOWER_IS_BETTER = {"mae", "mse"}
 
 
 def markdown_table(frame):
@@ -89,13 +90,18 @@ def run(summary_path, protocol_path, output):
         "comparison_count": len(comparisons),
         "absolute_difference": "model metric - baseline metric",
         "relative_change": "(model metric - baseline metric) / baseline metric",
-        "direction": "All included metrics are higher-is-better; a negative change means the model scores below the baseline on that metric.",
+        "direction": {
+            "higher_is_better": [metric for metric in metrics if metric not in LOWER_IS_BETTER],
+            "lower_is_better": [metric for metric in metrics if metric in LOWER_IS_BETTER],
+            "absolute_difference": "model metric - baseline metric for every metric",
+            "interpretation": "For ranking/beyond-accuracy metrics, positive change is better; for MAE/MSE, negative change is better.",
+        },
         "interpretation": "Percentage change measures scale relative to a baseline, not statistical significance or causal improvement.",
         "warnings": warnings,
         "sha256": {
             str(summary_path): hashlib.sha256(summary_path.read_bytes()).hexdigest(),
             str(protocol_path): hashlib.sha256(protocol_path.read_bytes()).hexdigest(),
-            "scripts/quantify_baselines.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "scripts/task22/quantify_baselines.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         },
     }
 
@@ -111,10 +117,10 @@ def run(summary_path, protocol_path, output):
     )
     report = (
         "# Task 2.2 — Experiment 3: improvement over naïve baselines\n\n"
-        "Every tuned individual and hybrid is compared with the saved Random and Pop exports across all 11 Task 2.1 metrics. "
+        "Every tuned individual and hybrid is compared with the saved Random and Pop exports across the seven ranking, four beyond-accuracy, and two rating-prediction metrics. "
         "Absolute difference is model minus baseline; relative change divides that difference by the baseline. No model is trained or selected here.\n\n"
         + markdown_table(report_table)
-        + "\n\nThe long-form CSV contains both comparisons for all accuracy and beyond-accuracy metrics. "
+        + "\n\nThe long-form CSV contains comparisons for all ranking, beyond-accuracy, and MAE/MSE metrics. Positive changes are improvements for higher-is-better metrics; negative changes are improvements for MAE/MSE. "
         "Percentage changes against near-zero Random values are mechanically large and must be read with absolute differences. "
         "The saved Random export also contains only four distinct score rows for 943 users.\n"
     )
