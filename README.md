@@ -14,16 +14,17 @@ parameters/        RecBole Model Configurations
 report/            Working Notes and LaTeX Report
 results/           Generated Outputs · Ignored
 scripts/           Runnable Entry Points per Task
+  task23/           Hybrid Coefficient, Ablation, and Contribution Analysis
 source/
   analysis/        Coefficient and Group Analysis
   hybrids/         Task 1 Hybrid Recommenders
-  metrics/         Task 2 Accuracy and Beyond-Accuracy Metrics
+  metrics/         Task 2 Ranking, Rating-Prediction, and Beyond-Accuracy Metrics
   reranking/       Task 3 Re-Rankers
 ```
 
 ## Simulate
 
-Run from the repository root in this order. Every step writes to `results/` and shares one seeded split except seed inference which draws a new split per seed. Steps use all cores by default and `--workers` caps them. RecBole uses a GPU when one is present which matters for FISM and NGCF whose tuning takes hours on CPU.
+Run from the repository root in this order. Every step writes to `results/`; the main experiments share one seeded split, while Task 1 seed inference and the Task 2.2 repeated-seed suite draw a new split per seed. Steps use all cores by default and `--workers` caps them. RecBole uses a GPU when one is present which matters for FISM and NGCF whose tuning takes hours on CPU.
 
 ```bash
 uv sync
@@ -40,9 +41,9 @@ uv sync
 | 1.4 – Other Hybrids                      | `uv run python scripts/hybrids.py`        | Scores and test metrics of the six hybrids in `results/hybrid/`                                                         |
 | 1.5 – Hybrid Tuning                      | `uv run python scripts/tune_hybrids.py`   | Scores and test metrics of the seven tuned hybrids in `results/hybrid/`                                                 |
 | **Task 2 — Evaluation of Effectiveness** |                                           |                                                                                                                         |
-| 2.2 – Individual Comparison              | `uv run python -m scripts.compare_individuals` | Compare tuned individual models: Accuracy and beyond-accuracy results for nine tuned individuals and two baselines in `results/task2/experiment1/`    |
-| 2.2 – Hybrid Comparison                  | `uv run python -m scripts.compare_hybrids` | Compare tuned hybrids with individual models: Accuracy and beyond-accuracy results for all 18 fixed exports in `results/task2/experiment2/`                            |
-| 2.2 – Baseline Improvements              | `uv run python -m scripts.quantify_baselines` | Quantify improvement over naïve baselines: Absolute and relative changes against Random and Pop in `results/task2/experiment3/`                                  |
-| 2.2 – Beyond-Accuracy Comparison         | `uv run python -m scripts.compare_beyond_accuracy` | Compare beyond-accuracy performance: Per-metric ranks, category leaders and Pareto frontier in `results/task2/experiment4/`                              |
-| 2.2 – Accuracy Trade-Offs                | `uv run python -m scripts.analyze_tradeoffs` | Examine accuracy–beyond-accuracy trade-offs: with correlations, pairwise frontiers and plots in `results/task2/experiment5/`                        |
-| **Task 3 — Societal Aspects**            |                                           |                                                                                                                         |
+| 2.2 – Regenerate RecBole Split           | `uv run python -m scripts.task22.save_split --config parameters/tuned/BPR.yaml --output results/split` | Recreate train/validation/test TSVs with the course RecBole implementation and the configured seed; no model training |
+| 2.2 – Core Evaluation (Experiments 1–5) | `uv run python -m scripts.task22.task22_pipeline --ks 10` | Run the complete fixed-export evaluation in one reproducible command; outputs are written to `results/task2/experiment1/` through `experiment5/` |
+| 2.2 – K Sweep and Uncertainty             | `uv run python -m scripts.task22.task22_bootstrap --reps 10000` | Evaluate K = 1, 3, 5, 10, 20 and user-bootstrap 95% confidence intervals for all 18 saved exports in `results/task2/repeated/` |
+| 2.2 – Optional Repeated-Seed Experiments    | `caffeinate -dimsu uv run python -m scripts.task22.task22_seeds --workers 4` | Optional retraining over seeds 2020–2024 for run-to-run uncertainty; not required for the current reported results |
+| 2.3 – Hybrid Contribution Analysis       | `uv run python -m scripts.task23.analyze_contributions` | Analyze Weighted coefficients and regularization, run leave-one-member-out ablations, and interpret Mixed, Switching, Cascade, and Feature Combination; outputs go to `results/task23/` |
+| **Task 3 — Societal Aspects**            |                                           |                                                                                           

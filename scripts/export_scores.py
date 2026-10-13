@@ -78,8 +78,9 @@ def fit(config, saved=True):
     return dataset, loaders, model, trainer, valid, len(trainer.train_loss_dict)
 
 
-def export(name, tuned=False):
-    config = load(name, "parameters/tuned" if tuned else "parameters")
+def export(name, tuned=False, seed=None):
+    overrides = {"seed": seed} if seed is not None else None
+    config = load(name, "parameters/tuned" if tuned else "parameters", overrides)
     dataset, loaders, model, trainer, best_valid, epochs = fit(config)
     save_split(dataset, loaders)
     test_result = trainer.evaluate(loaders[2], load_best_model=True)
@@ -106,4 +107,7 @@ def export(name, tuned=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model")
-    export(parser.parse_args().model)
+    parser.add_argument("--tuned", action="store_true")
+    parser.add_argument("--seed", type=int)
+    args = parser.parse_args()
+    export(args.model, tuned=args.tuned, seed=args.seed)

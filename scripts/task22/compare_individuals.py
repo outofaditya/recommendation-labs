@@ -9,12 +9,15 @@ import numpy as np
 import pandas as pd
 
 from source.metrics.beyond_accuracy import BeyondAccuracyMetrics, jaccard_distance
+from source.metrics.evaluation_metrics import EvaluationMetrics
 from source.metrics.ranking_metrics import RankingMetrics
 
 MODELS = ["Random", "Pop", "ItemKNN", "UserKNN", "BPR", "NeuMF", "FISM", "LightGCN", "NGCF", "EASE", "SLIMElastic"]
 ACCURACY_METRICS = ["ndcg", "recall", "precision", "mrr", "hit", "map", "f1"]
 BEYOND_ACCURACY_METRICS = ["coverage", "novelty", "ild", "serendipity"]
 METRICS = ACCURACY_METRICS + BEYOND_ACCURACY_METRICS
+PREDICTION_METRICS = ["mae", "mse"]
+ALL_METRICS = METRICS + PREDICTION_METRICS
 
 
 def load_predictions(path, *, allow_excluded=False):
@@ -61,7 +64,13 @@ def load_item_features(path, items):
     return [features_by_id[item] for item in items]
 
 
-def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
+def run(
+    results,
+    output,
+    k=10,
+    items_path=Path("data/ml-100k/ml-100k.item"),
+    interactions_path=Path("data/ml-100k/ml-100k.inter"),
+):
     if k < 1:
         raise ValueError("k must be positive")
     rows, diagnostics, hashes = [], {}, {}
@@ -79,11 +88,21 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
                 raise ValueError("No test users or fewer than k eligible items for a test user")
             item_features = load_item_features(items_path, items)
             distance_matrix = BeyondAccuracyMetrics.build_genre_distance_matrix(item_features, len(items), jaccard_distance)
+            test_pairs = pd.read_csv(results / "split/test.tsv", sep="\t", dtype=str)
+            ratings = EvaluationMetrics.load_interaction_ratings(interactions_path)
         elif not (np.array_equal(users, reference[0]) and np.array_equal(items, reference[1])):
             raise ValueError(f"User/item ID order differs for {name}")
         values = RankingMetrics.calculate_all_metrics(scores, hidden, masks["test"], k)
         values.update(BeyondAccuracyMetrics.calculate_all_metrics(scores, hidden, masks["test"], distance_matrix, k))
-        rows.append({"model": name, **{f"{m}@{k}": values[f"{m}@{k}"] for m in METRICS}})
+        prediction_values, prediction_diagnostics = EvaluationMetrics.calculate_test_metrics(users, items, scores, test_pairs, ratings)
+        rows.append(
+            {
+                "model": name,
+                **{f"{m}@{k}": values[f"{m}@{k}"] for m in METRICS},
+                **prediction_values,
+            }
+        )
+        diagnostics[name] = {"prediction": prediction_diagnostics}
         hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
         if name in ("Random", "Pop"):
             distinct = len(np.unique(scores, axis=0))
@@ -98,11 +117,15 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         path = results / "split" / f"{name}.tsv"
         hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     hashes[str(items_path)] = hashlib.sha256(items_path.read_bytes()).hexdigest()
-    metric_path = Path(__file__).resolve().parents[1] / "source/metrics/ranking_metrics.py"
+    hashes[str(interactions_path)] = hashlib.sha256(interactions_path.read_bytes()).hexdigest()
+    repo_root = Path(__file__).resolve().parents[2]
+    metric_path = repo_root / "source/metrics/ranking_metrics.py"
     hashes["source/metrics/ranking_metrics.py"] = hashlib.sha256(metric_path.read_bytes()).hexdigest()
-    beyond_path = Path(__file__).resolve().parents[1] / "source/metrics/beyond_accuracy.py"
+    beyond_path = repo_root / "source/metrics/beyond_accuracy.py"
     hashes["source/metrics/beyond_accuracy.py"] = hashlib.sha256(beyond_path.read_bytes()).hexdigest()
-    hashes["scripts/compare_individuals.py"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    prediction_path = repo_root / "source/metrics/evaluation_metrics.py"
+    hashes["source/metrics/evaluation_metrics.py"] = hashlib.sha256(prediction_path.read_bytes()).hexdigest()
+    hashes["scripts/task22/compare_individuals.py"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     summary = pd.DataFrame(rows)
     protocol = {
         "experiment": "Task 2.2 experiment 1: tuned individual models",
@@ -113,13 +136,20 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         "catalog_size": len(items),
         "split_interactions": {name: int(mask.sum()) for name, mask in masks.items()},
         "selection": "All nine fixed Task 1 tuned individuals plus Random and Pop; no test-based selection or retraining",
-        "relevance": "Binary test interaction, irrespective of rating value",
+        "relevance": "Binary test interaction, irrespective of rating value, for ranking metrics",
+        "rating_prediction": {
+            "target": "Original explicit rating from ml-100k.inter for each test user-item pair",
+            "metrics": "MAE and MSE over finite predicted scores; lower is better",
+            "ordering": "Prediction metrics do not use recommendation rank or K",
+            "unavailable_predictions": "Non-finite hybrid candidate scores are excluded and reported in diagnostics",
+        },
         "hidden": ["train", "valid"],
         "ties": "Stable exported item-column order",
         "aggregation": "Macro mean over users with at least one test interaction",
         "metrics": {
             "accuracy": "Task 2.1 RankingMetrics.calculate_all_metrics; AP denominator min(test positives, K); per-user F1",
             "beyond_accuracy": "Task 2.1 BeyondAccuracyMetrics: catalog coverage; self-information novelty from hidden interaction frequency; genre-Jaccard ILD; relevance-weighted genre-distance serendipity",
+            "rating_prediction": "MAE and MSE against original explicit test ratings; lower is better and rank is not used",
         },
         "uncertainty": "One saved split and one export per model; no significance or multi-seed claims",
         "baseline_diagnostics": diagnostics,
@@ -133,10 +163,10 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
     report = (
         f"# Task 2.2 — Experiment 1\n\n"
         f"Evaluated {len(rows)} fixed individual-model exports on {int(eligible.sum())} users at K={k}. "
-        "Train and validation interactions are excluded. Accuracy and beyond-accuracy metrics use the Task 2.1 implementations. "
+        "Train and validation interactions are excluded. Ranking and beyond-accuracy metrics use the Task 2.1 implementations; MAE and MSE compare finite test-pair predictions with the original explicit ratings and do not use ranking order. "
         "No models were trained or selected using test results.\n\n"
         + "\n".join(table)
-        + "\n\nResults describe one saved split; numerical differences do not establish statistical significance.\n"
+        + "\n\nMAE and MSE are pointwise errors against explicit test ratings, not ranking metrics; lower is better. The exported model scores are not calibrated to a common rating scale, so these comparisons are descriptive. Results describe one saved split; numerical differences do not establish statistical significance.\n"
         + "\n".join(f"\nWarning: {warning}\n" for warning in warnings)
     )
     output.mkdir(parents=True, exist_ok=True)
@@ -151,9 +181,10 @@ def main():
     parser.add_argument("--results", type=Path, default=Path("results"))
     parser.add_argument("--output", type=Path, default=Path("results/task2/experiment1"))
     parser.add_argument("--items", type=Path, default=Path("data/ml-100k/ml-100k.item"))
+    parser.add_argument("--interactions", type=Path, default=Path("data/ml-100k/ml-100k.inter"))
     parser.add_argument("--k", type=int, default=10)
     args = parser.parse_args()
-    summary, protocol = run(args.results, args.output, args.k, args.items)
+    summary, protocol = run(args.results, args.output, args.k, args.items, args.interactions)
     print(summary.to_string(index=False, float_format=lambda value: f"{value:.4f}"))
     for warning in protocol["warnings"]:
         print(f"WARNING: {warning}")
