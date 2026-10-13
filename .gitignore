@@ -28,3 +28,12 @@ report/*.fdb_latexmk
 
 #Task2.2
 tests/*
+
+# Task2.3
+# report/note_task2.3.md
+# scripts/task23
+
+# Task2.4
+report/note_task2.4.md
+scripts/task24
+
