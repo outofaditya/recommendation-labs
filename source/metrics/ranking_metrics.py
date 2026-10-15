@@ -77,24 +77,29 @@ class RankingMetrics:
         return float(sum_precs / min(len(true_items), len(top_k_items)))
 
     @staticmethod
-    def calculate_all_metrics(scores: np.ndarray, hidden: np.ndarray, relevant: np.ndarray, k: int = 10) -> dict[str, float]:
-        masked = np.where(hidden, -np.inf, scores)  # Replace historical item scores with -infinity
-        ranked = np.argsort(-masked, axis=1, kind="stable")[:, :k]
-        hits = np.take_along_axis(relevant, ranked, axis=1)  # True if the ranked item is in the test set
+    def rank_top_k(scores: np.ndarray, hidden: np.ndarray, k: int = 10) -> np.ndarray:
+        """Top-K item indices per user, with already-seen items excluded."""
+        masked = np.where(hidden, -np.inf, scores)
+        return np.argsort(-masked, axis=1, kind="stable")[:, :k]
 
-        # Remove users users with no test data
+    @staticmethod
+    def calculate_per_user_metrics(
+        scores: np.ndarray, hidden: np.ndarray, relevant: np.ndarray, k: int = 10, ranked: np.ndarray | None = None
+    ) -> dict[str, np.ndarray]:
+        """Per-user metric values. Users without relevant test items get NaN."""
+        if ranked is None:
+            ranked = RankingMetrics.rank_top_k(scores, hidden, k)
+        hits = np.take_along_axis(relevant, ranked, axis=1)
+
         count = relevant.sum(axis=1)
         valid_users = count > 0
-        hits = hits[valid_users]
-        count = count[valid_users]
+        hits, count = hits[valid_users], count[valid_users]
 
         found = hits.any(axis=1)
         hits_sum = hits.sum(axis=1)
         discount = 1 / np.log2(np.arange(2, k + 2))
         ideal = np.cumsum(discount)[np.minimum(count, k) - 1]
-        cum_hits = hits.cumsum(axis=1)
-        precisions_at_k = cum_hits / np.arange(1, k + 1)
-        sum_precisdions = (precisions_at_k * hits).sum(axis=1)
+        precisions_at_k = hits.cumsum(axis=1) / np.arange(1, k + 1)
 
         results = {
             f"hit@{k}": found,
@@ -103,10 +108,20 @@ class RankingMetrics:
             f"mrr@{k}": np.where(found, 1 / (hits.argmax(axis=1) + 1), 0),
             f"ndcg@{k}": (hits * discount).sum(axis=1) / ideal,
             f"f1@{k}": (2 * hits_sum) / (k + count),
-            f"map@{k}": sum_precisdions / np.minimum(count, k),
+            f"map@{k}": (precisions_at_k * hits).sum(axis=1) / np.minimum(count, k),
         }
 
-        return {name: float(values.mean()) for name, values in results.items()}
+        per_user = {}
+        for name, values in results.items():
+            full = np.full(len(relevant), np.nan)
+            full[valid_users] = values
+            per_user[name] = full
+        return per_user
+
+    @staticmethod
+    def calculate_all_metrics(scores: np.ndarray, hidden: np.ndarray, relevant: np.ndarray, k: int = 10) -> dict[str, float]:
+        per_user = RankingMetrics().calculate_per_user_metrics(scores, hidden, relevant, k)
+        return {name: float(np.nanmean(values)) for name, values in per_user.items()}
 
     @classmethod
     def _load_evaluation_data(cls, prediction_file: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
