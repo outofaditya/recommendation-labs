@@ -1,6 +1,6 @@
 import numpy as np
 from collections.abc import Iterable
-from util import RecommenderDataLoader
+from source.metrics.util import RecommenderDataLoader
 
 
 class EvaluationMetrics:
@@ -20,9 +20,7 @@ class EvaluationMetrics:
         return float(np.sqrt(EvaluationMetrics.calculate_mse(y_true, y_pred)))
 
     @classmethod
-    def evaluate_file(
-        cls, prediction_file: str = "Random.npz", metrics: Iterable[str] = ("MAE", "MSE", "RMSE"), apply_id_offset: bool = True
-    ) -> dict[str, float]:
+    def evaluate_file(cls, prediction_file: str = "Random.npz", metrics: Iterable[str] = ("MAE", "MSE", "RMSE")) -> dict[str, float]:
         with RecommenderDataLoader(base_dir="results") as loader:
             users, items, predicted_scores = loader.load_predictions(npz_filename=prediction_file)
             test_pairs = loader.load_split_data_file()
@@ -81,4 +79,5 @@ class EvaluationMetrics:
         return results
 
 
-print(EvaluationMetrics.evaluate_file(prediction_file="EASE.npz"))
+if __name__ == "__main__":
+    print(EvaluationMetrics.evaluate_file(prediction_file="EASE.npz"))
