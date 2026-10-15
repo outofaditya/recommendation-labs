@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-METRICS = ("coverage@10", "novelty@10", "ild@10", "serendipity@10")
+METRIC_NAMES = ("coverage", "novelty", "ild", "serendipity")
 
 
 def pareto_mask(values):
@@ -30,22 +30,23 @@ def markdown_table(frame):
     return "\n".join(lines)
 
 
-def run(summary_path, protocol_path, output):
+def run(summary_path, protocol_path, output, k=10):
+    metrics = tuple(f"{metric}@{k}" for metric in METRIC_NAMES)
     source = pd.read_csv(summary_path)
-    required = {"model", "category", *METRICS}
+    required = {"model", "category", *metrics}
     missing = required - set(source.columns)
     if missing:
         raise ValueError(f"Summary is missing columns: {sorted(missing)}")
     if source["model"].duplicated().any():
         raise ValueError("Summary contains duplicate model rows")
-    values = source[list(METRICS)].apply(pd.to_numeric, errors="coerce")
+    values = source[list(metrics)].apply(pd.to_numeric, errors="coerce")
     if not np.isfinite(values.to_numpy()).all():
         raise ValueError("Beyond-accuracy values must be finite numbers")
 
     summary = source[["model", "category"]].copy()
-    summary[list(METRICS)] = values
+    summary[list(metrics)] = values
     rankings = []
-    for metric in METRICS:
+    for metric in metrics:
         summary[f"{metric}_rank"] = summary[metric].rank(method="min", ascending=False).astype(int)
         category_best = summary.groupby("category")[metric].transform("max")
         summary[f"{metric}_category_leader"] = summary[metric] == category_best
@@ -61,17 +62,18 @@ def run(summary_path, protocol_path, output):
                 }
             )
     rankings = pd.DataFrame(rankings).sort_values(["metric", "global_rank", "model"], kind="stable")
-    summary["pareto_frontier"] = pareto_mask(summary[list(METRICS)].to_numpy())
+    summary["pareto_frontier"] = pareto_mask(summary[list(metrics)].to_numpy())
     leaders = rankings[rankings["category_leader"]].copy()
-    frontier = summary[summary["pareto_frontier"]][["model", "category", *METRICS]].copy()
+    frontier = summary[summary["pareto_frontier"]][["model", "category", *metrics]].copy()
 
     source_protocol = json.loads(protocol_path.read_text())
     protocol = {
         "experiment": "Task 2.2 experiment 4: beyond-accuracy comparison",
+        "k": k,
         "status": source_protocol.get("status", "complete"),
         "source_experiment": source_protocol.get("experiment"),
         "models": summary["model"].tolist(),
-        "metrics": list(METRICS),
+        "metrics": list(metrics),
         "direction": "Higher is better for all four metrics",
         "ranking": "Descending global rank with minimum rank for ties",
         "category_leaders": "All tied maxima within baseline, individual, and hybrid categories",
@@ -81,7 +83,7 @@ def run(summary_path, protocol_path, output):
         "sha256": {
             str(summary_path): hashlib.sha256(summary_path.read_bytes()).hexdigest(),
             str(protocol_path): hashlib.sha256(protocol_path.read_bytes()).hexdigest(),
-            "scripts/compare_beyond_accuracy.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "scripts/task22/compare_beyond_accuracy.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         },
     }
 
@@ -96,7 +98,7 @@ def run(summary_path, protocol_path, output):
     )[["Metric", "Category", "Leader", "Value", "Global rank"]]
     report = (
         "# Task 2.2 — Experiment 4: beyond-accuracy performance\n\n"
-        "All 18 fixed local exports are ranked separately on Coverage@10, Novelty@10, genre-Jaccard ILD@10, and relevance-weighted Serendipity@10. "
+        f"All 18 fixed local exports are ranked separately on Coverage@{k}, Novelty@{k}, genre-Jaccard ILD@{k}, and relevance-weighted Serendipity@{k}. "
         "No model is trained or selected, and no composite score is formed.\n\n"
         "## Category leaders\n\n"
         + markdown_table(leader_table)
@@ -129,9 +131,11 @@ def main():
         default=Path("results/task2/experiment2/protocol.json"),
     )
     parser.add_argument("--output", type=Path, default=Path("results/task2/experiment4"))
+    parser.add_argument("--k", type=int, default=10)
     args = parser.parse_args()
-    summary, _, leaders, frontier, _ = run(args.summary, args.protocol, args.output)
-    print(summary[["model", "category", *METRICS]].to_string(index=False, float_format=lambda value: f"{value:.4f}"))
+    summary, _, leaders, frontier, _ = run(args.summary, args.protocol, args.output, args.k)
+    metric_columns = [f"{metric}@{args.k}" for metric in METRIC_NAMES]
+    print(summary[["model", "category", *metric_columns]].to_string(index=False, float_format=lambda value: f"{value:.4f}"))
     print(f"Category leaders: {len(leaders)}; Pareto-frontier models: {len(frontier)}")
     print(f"Saved beyond-accuracy comparison to {args.output}")
 

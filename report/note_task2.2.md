@@ -1,29 +1,40 @@
 # Task 2.2 — Evaluation of Effectiveness
-7 accuracy: NDCG、Recall、Precision、MRR、Hit、MAP、F1
+7 ranking-accuracy metrics: NDCG, Recall, Precision, MRR, Hit, MAP, F1
 
-4 beyond-accuracy: Coverage、Novelty、ILD、Serendipity
+2 rating-prediction metrics: MAE, MSE
+
+4 beyond-accuracy metrics: Coverage, Novelty, ILD, Serendipity
+
+## Reproducible evaluation workflow
+
+Task 2.2 evaluates saved Task 1 exports; it does not retrain models. After updating RecBole and regenerating the corrected train/validation/test split, run the complete deterministic evaluation with:
+
+`uv run python -m scripts.task22.task22_pipeline --ks 10`
+
+The pipeline runs Experiments 1–5 in dependency order. Use `--ks 1 3 5 10 20` for a local K sweep. The separate `scripts.task22.task22_bootstrap` command estimates test-user sampling uncertainty. Repeated-seed evaluation is an optional extension and is not included in the current results. Do not mix outputs generated before and after the corrected split.
 
 ## Experiment 1 - Compare tuned individual models
 
-**Setup.** Evaluate the 9 tuned Task 1 individual models, plus 2 baseline Random and Pop on the same saved MovieLens 100K split (943 test users). 
-Apply the Task 2.1 accuracy and beyond-accuracy metrics at K = 10, treating test interactions as binary relevance. 
-Average user-level metrics across users; resolve score ties by exported item-column order. 
+**Setup.** Evaluate the 9 tuned Task 1 individual models, plus 2 baseline Random and Pop on the same saved MovieLens 100K split (943 test users).
+Apply the Task 2.1 accuracy and beyond-accuracy metrics at K = 10, treating test interactions as binary relevance.
+Average user-level metrics across users; resolve score ties by exported item-column order.
+In addition, calculate MAE and MSE on the original explicit test ratings from `data/ml-100k/ml-100k.inter`. These pointwise metrics use the model score for the test user-item pair and do not use K or recommendation order; lower values are better.
 
-**Results.** All metrics below are measured at K = 10; higher values indicate better ranking accuracy.
+**Results.** Ranking metrics below are measured at K = 10; higher values indicate better ranking accuracy. MAE and MSE use all finite test-pair predictions, are not @K metrics, and are lower-is-better.
 
-| Model | NDCG | Recall | Precision | MRR | Hit | MAP | F1 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Random | 0.0065 | 0.0050 | 0.0052 | 0.0159 | 0.0520 | 0.0024 | 0.0044 |
-| Pop | 0.1004 | 0.0850 | 0.0828 | 0.1913 | 0.4719 | 0.0457 | 0.0680 |
-| ItemKNN | 0.2783 | 0.2370 | 0.1829 | 0.4636 | 0.7667 | 0.1691 | 0.1670 |
-| UserKNN | 0.2877 | 0.2524 | 0.1909 | 0.4770 | 0.7932 | 0.1722 | 0.1760 |
-| BPR | 0.3197 | 0.2683 | 0.2137 | 0.5197 | 0.8155 | 0.1989 | 0.1934 |
-| NeuMF | 0.3108 | 0.2618 | 0.2116 | 0.5004 | 0.7964 | 0.1935 | 0.1903 |
-| FISM | 0.2873 | 0.2488 | 0.1911 | 0.4852 | 0.8006 | 0.1693 | 0.1765 |
-| LightGCN | 0.3146 | 0.2661 | 0.2131 | 0.5138 | 0.8240 | 0.1932 | 0.1922 |
-| NGCF | 0.3183 | 0.2717 | 0.2157 | 0.5131 | 0.8144 | 0.1975 | 0.1951 |
-| EASE | **0.3309** | **0.2808** | **0.2208** | **0.5316** | 0.8229 | **0.2078** | **0.2011** |
-| SLIMElastic | 0.3240 | 0.2769 | 0.2185 | 0.5135 | 0.8134 | 0.2037 | 0.1981 |
+| Model | NDCG | Recall | Precision | MRR | Hit | MAP | F1 | MAE | MSE |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Random | 0.0065 | 0.0050 | 0.0052 | 0.0159 | 0.0520 | 0.0024 | 0.0044 | 3.0220 | 10.4898 |
+| Pop | 0.1004 | 0.0850 | 0.0828 | 0.1913 | 0.4719 | 0.0457 | 0.0680 | 2.6954 | 8.4815 |
+| ItemKNN | 0.2783 | 0.2370 | 0.1829 | 0.4636 | 0.7667 | 0.1691 | 0.1670 | 23.0020 | 812.5177 |
+| UserKNN | 0.2877 | 0.2524 | 0.1909 | 0.4770 | 0.7932 | 0.1722 | 0.1760 | 3.9324 | 25.5396 |
+| BPR | 0.3197 | 0.2683 | 0.2137 | 0.5197 | 0.8155 | 0.1989 | 0.1934 | 1.7593 | 4.5992 |
+| NeuMF | 0.3108 | 0.2618 | 0.2116 | 0.5004 | 0.7964 | 0.1935 | 0.1903 | 2.9573 | 9.9442 |
+| FISM | 0.2873 | 0.2488 | 0.1911 | 0.4852 | 0.8006 | 0.1693 | 0.1765 | 6.1158 | 52.8965 |
+| LightGCN | 0.3146 | 0.2661 | 0.2131 | 0.5138 | 0.8240 | 0.1932 | 0.1922 | 1.8489 | 5.2913 |
+| NGCF | 0.3183 | 0.2717 | 0.2157 | 0.5131 | 0.8144 | 0.1975 | 0.1951 | **1.5148** | **3.6855** |
+| EASE | **0.3309** | **0.2808** | **0.2208** | **0.5316** | 0.8229 | **0.2078** | **0.2011** | 3.2628 | 11.8639 |
+| SLIMElastic | 0.3240 | 0.2769 | 0.2185 | 0.5135 | 0.8134 | 0.2037 | 0.1981 | 3.2000 | 11.4776 |
 
 Beyond-accuracy results use catalogue coverage, self-information novelty, genre-Jaccard intra-list diversity (ILD), and relevance-weighted genre-distance serendipity.
 
@@ -41,35 +52,37 @@ Beyond-accuracy results use catalogue coverage, self-information novelty, genre-
 | EASE | 0.2325 | 8.5177 | 0.8099 | **0.1791** |
 | SLIMElastic | 0.2354 | 8.5315 | 0.8118 | 0.1775 |
 
-**Discussion.** 
+**Discussion.**
 ```
-All nine tuned models outperform both naïve baselines on every accuracy metric. 
+All nine tuned models outperform both naïve baselines on every ranking-accuracy metric.
 
-**EASE leads on six of seven**, while LightGCN has the highest Hit@10. 
+**EASE leads on six of seven**, while LightGCN has the highest Hit@10.
 
-FISM reaches the widest catalogue coverage (0.3722), and EASE has the highest serendipity (0.1791), showing that the most accurate model can still recommend relevant items that differ from user history. 
+FISM reaches the widest catalogue coverage (0.3722), and EASE has the highest serendipity (0.1791), showing that the most accurate model can still recommend relevant items that differ from user history.
 
-Random's extreme novelty (12.6636) does not imply useful recommendations: its serendipity is only 0.0043 as novelty receives no relevance requirement whereas serendipity does. 
+Random's extreme novelty (12.6636) does not imply useful recommendations: its serendipity is only 0.0043 as novelty receives no relevance requirement whereas serendipity does.
 
-Pop combines very low coverage (0.0357) with high ILD (0.8151); one repeated popular list can span several genres while covering little of the catalogue. BPR exceeds NeuMF on every accuracy metric, but NeuMF provides broader coverage and greater novelty. 
+Pop combines very low coverage (0.0357) with high ILD (0.8151); one repeated popular list can span several genres while covering little of the catalogue. BPR exceeds NeuMF on every ranking-accuracy metric, but NeuMF provides broader coverage and greater novelty.
+
+For rating prediction, NGCF has the lowest MAE (1.5148) and MSE (3.6855) among the individual models. This is a different conclusion from the ranking comparison: EASE remains the ranking leader, while NGCF is the best raw-score predictor on this split. The exported model scores are not calibrated to a common 1–5 rating scale across model families, so MAE/MSE comparisons are descriptive rather than evidence that one model is universally superior.
 
 JC: EASE is the strongest individual-model accuracy benchmark, but different models each have their strengths in coverage, novelty, and serendipity.
 ```
-**Limitations.** These are single-split results, without significance testing. 
+**Limitations.** These are single-split results, without significance testing.
 
-**Reproduce:** `uv run python -m scripts.compare_individuals`
+**Reproduce:** `uv run python -m scripts.task22.compare_individuals`
 
-**Source outputs:** `results/task2/experiment1/summary.csv` (11 models and 11 metrics), `comparison.md`, and `protocol.json` (metric definitions, evaluation settings, input hashes and baseline diagnostics).
+**Source outputs:** `results/task2/experiment1/summary.csv` (11 models and 13 metrics: 7 ranking, 4 beyond-accuracy, and MAE/MSE), `comparison.md`, and `protocol.json` (metric definitions, rating target, evaluation settings, input hashes and diagnostics).
 
 ## Experiment 2 - Compare tuned hybrids with individual models
 
-**Setup.** Reuse 9 tuned individual exports, 7 tuned hybrid exports and both baselines Random and Pop on the same local split as Experiment 1 (943 test users, 1,682 items). 
+**Setup.** Reuse 9 tuned individual exports, 7 tuned hybrid exports and both baselines Random and Pop on the same local split as Experiment 1 (943 test users, 1,682 items).
 
-Evaluate the seven Task 2.1 accuracy metrics and four beyond-accuracy metrics at K = 10. 
+Evaluate the seven Task 2.1 ranking metrics and four beyond-accuracy metrics at K = 10, plus MAE/MSE against the original explicit ratings.
 
 EASE is a descriptive reference as it has the highest observed individual NDCG on this split.
 
-**Results.** The tables reproduce the local `uv run python -m scripts.compare_hybrids` output to four decimal places. All seven hybrid rows use tuned configurations. Bold accuracy values mark the highest score across all 18 models; the beyond-accuracy table emphasizes comparison with EASE.
+**Results.** The tables reproduce the local `uv run python -m scripts.task22.compare_hybrids` output to four decimal places. All seven hybrid rows use tuned configurations. Bold values in the ranking table mark the highest score across all 18 models; lower MAE/MSE values are better and are shown separately because they do not measure recommendation order.
 
 | Model | NDCG@10 | Recall@10 | Precision@10 | MRR@10 | Hit@10 | MAP@10 | F1@10 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -92,6 +105,29 @@ EASE is a descriptive reference as it has the highest observed individual NDCG o
 | Feature Augmentation | 0.3027 | 0.2562 | 0.1968 | 0.5075 | 0.7879 | 0.1858 | 0.1804 |
 | Meta-Level | 0.3053 | 0.2632 | 0.2053 | 0.5007 | 0.8144 | 0.1865 | 0.1863 |
 
+| Model | MAE | MSE | Finite test-pair coverage |
+| --- | ---: | ---: | ---: |
+| Random (baseline) | 3.0220 | 10.4898 | 100.0% |
+| Pop (baseline) | 2.6954 | 8.4815 | 100.0% |
+| ItemKNN | 23.0020 | 812.5177 | 100.0% |
+| UserKNN | 3.9324 | 25.5396 | 100.0% |
+| BPR | 1.7593 | 4.5992 | 100.0% |
+| NeuMF | 2.9573 | 9.9442 | 100.0% |
+| FISM | 6.1158 | 52.8965 | 100.0% |
+| LightGCN | 1.8489 | 5.2913 | 100.0% |
+| NGCF | 1.5148 | 3.6855 | 100.0% |
+| EASE | 3.2628 | 11.8639 | 100.0% |
+| SLIMElastic | 3.2000 | 11.4776 | 100.0% |
+| Weighted | 2.1349 | 5.7478 | 81.5% |
+| Mixed | 3.2683 | 11.8931 | 100.0% |
+| Cascade | 1.9707 | 7.8614 | 32.0% |
+| Switching | 1.9056 | 5.5764 | 100.0% |
+| Feature Combination | 5.9358 | 37.5271 | 81.5% |
+| Feature Augmentation | 2.3986 | 9.3012 | 100.0% |
+| Meta-Level | 5.0440 | 49.0040 | 100.0% |
+
+The hybrid MAE/MSE values use only finite scores in each exported candidate pool. Cascade therefore has only 32.0% test-pair coverage, while Weighted and Feature Combination have 81.5%; these error values must not be compared as if every model made predictions for the same set of test pairs.
+
 | Model | Coverage@10 | Novelty@10 | ILD@10 | Serendipity@10 |
 | --- | ---: | ---: | ---: | ---: |
 | EASE (individual reference) | 0.2325 | 8.5177 | **0.8099** | 0.1791 |
@@ -103,33 +139,35 @@ EASE is a descriptive reference as it has the highest observed individual NDCG o
 | Feature Augmentation | 0.2004 | 8.4134 | 0.8067 | 0.1607 |
 | Meta-Level | 0.1968 | 8.4452 | 0.8057 | 0.1678 |
 
-**Discussion.** 
+**Discussion.**
 ```
-All seven tuned hybrids outperform Random and Pop on every accuracy metric. 
+All seven tuned hybrids outperform Random and Pop on every ranking-accuracy metric.
 
-Feature Combination, Weighted and Mixed also exceed EASE on all seven accuracy metrics. 
+For pointwise rating prediction, Weighted has the lowest hybrid MAE (2.1349) and Switching has the lowest hybrid MSE (5.5764), but these figures are based on different finite-prediction coverage. The raw score scales are not calibrated uniformly across model families, so this is descriptive evidence only.
 
-Feature Combination leads on six and simultaneously improves EASE's coverage (0.2848 versus 0.2325), novelty (8.5807 versus 8.5177), and serendipity (0.1867 versus 0.1791), with a small ILD decrease (0.8039 versus 0.8099). 
+Feature Combination, Weighted and Mixed also exceed EASE on all seven ranking-accuracy metrics.
 
-Weighted shows the same direction and has the highest MRR (0.5363). Mixed improves accuracy and serendipity but reduces novelty. 
+Feature Combination leads on six and simultaneously improves EASE's coverage (0.2848 versus 0.2325), novelty (8.5807 versus 8.5177), and serendipity (0.1867 versus 0.1791), with a small ILD decrease (0.8039 versus 0.8099).
 
-Cascade retrieves more relevant items than EASE but ranks them less favourably by NDCG, MRR, and MAP. 
+Weighted shows the same direction and has the highest MRR (0.5363). Mixed improves ranking accuracy and serendipity but reduces novelty.
 
-Switching, Augmentation, and Meta-Level fall below EASE on every accuracy metric; 
-Augmentation and Meta-Level also narrow catalogue coverage. 
+Cascade retrieves more relevant items than EASE but ranks them less favourably by NDCG, MRR, and MAP.
+
+Switching, Augmentation, and Meta-Level fall below EASE on every ranking-accuracy metric;
+Augmentation and Meta-Level also narrow catalogue coverage.
 
 JC: hybrid approach may not automatically lead to improvement. Weighted and Feature Combination methods perform best probably as they preserve the complementary signals from multiple models, whereas structures such as Switching and Augmentation may lose information from the stronger model.
 ```
 
 **Limitations.** Results describe one saved local split without significance testing or repeated training. Coefficient analysis remains a separate experiment.
 
-**Reproduce:** `uv run python -m scripts.compare_hybrids` (or `.venv/bin/python -m scripts.compare_hybrids` in the existing environment).
+**Reproduce:** `uv run python -m scripts.task22.compare_hybrids` (or `.venv/bin/python -m scripts.task22.compare_hybrids` in the existing environment).
 
-**Source outputs:** `results/task2/experiment2/summary.csv` (all 18 models and 11 metrics), `hybrid_vs_individual.csv` (all 63 hybrid/individual pairs across 11 metrics), `comparison.md`, and `protocol.json` (settings, candidate diagnostics, limitations and input hashes).
+**Source outputs:** `results/task2/experiment2/summary.csv` (all 18 models and 13 metrics), `hybrid_vs_individual.csv` (all 63 hybrid/individual pairs across 13 metrics), `comparison.md`, and `protocol.json` (settings, rating target, candidate and prediction-coverage diagnostics, limitations and input hashes).
 
 ## Experiment 3 - Quantify improvement over naïve baselines
 
-**Setup.** Compare every tuned individual and hybrid with the saved Random and Pop exports using the 11 metrics from Experiment 2. For each model, baseline, and metric, calculate the absolute difference $\Delta=m-b$ and relative change $100(m-b)/b$. All included metrics are **higher-is-better**, so a **negative value means the model scores below that baseline**.
+**Setup.** Compare every tuned individual and hybrid with the saved Random and Pop exports using the 13 metrics from Experiment 2. For each model, baseline, and metric, calculate the absolute difference $\Delta=m-b$ and relative change $100(m-b)/b$. Ranking and beyond-accuracy metrics are **higher-is-better**; MAE and MSE are **lower-is-better**, so a negative change is an improvement only for MAE/MSE.
 
 **Results.** NDCG@10 improvements are shown against both baselines. Absolute differences remain interpretable when a baseline is near zero; percentages against Random are mechanically very large.
 
@@ -161,36 +199,36 @@ The complete output contains the same absolute and relative comparisons for Reca
 | Mixed | +563.3% | +5.4% | -1.0% | +164.7% |
 | Feature Combination | **+698.3%** | **+6.8%** | -1.4% | **+170.4%** |
 
-**Discussion.** 
+**Discussion.**
 ```
-Every tuned model improves all seven accuracy metrics over both baselines. 
+Every tuned model improves all seven accuracy metrics over both baselines.
 
-Pop is the more informative accuracy reference: Feature Combination improves its NDCG by 0.2395, or 238.5%, followed by Weighted at 236.1% and Mixed at 234.6%. 
+Pop is the more informative accuracy reference: Feature Combination improves its NDCG by 0.2395, or 238.5%, followed by Weighted at 236.1% and Mixed at 234.6%.
 
-Their gains over Random exceed 5,000% as Random NDCG is only 0.0065; this scale should not be confused with statistical evidence. 
+Their gains over Random exceed 5,000% as Random NDCG is only 0.0065; this scale should not be confused with statistical evidence.
 
-Beyond accuracy exposes different behaviour. 
+Beyond accuracy exposes different behaviour.
 
-Feature Combination improves Pop's coverage by 698.3%, novelty by 6.8%, and serendipity by 170.4%, but its ILD is 1.4% lower. 
+Feature Combination improves Pop's coverage by 698.3%, novelty by 6.8%, and serendipity by 170.4%, but its ILD is 1.4% lower.
 
 Thus, the strongest hybrid is broader, more novel, and more likely to produce relevant unexpected items than Pop, while Pop's single repeated ranking happens to contain a slightly more genre-diverse set of ten movies.
 
-JC: All tuned models outperform both Random and Pop on accuracy; 
-however, the extremely large percentage gains over Random are merely a mathematical artifact and should not be treated as statistical evidence. 
+JC: All tuned models outperform both Random and Pop on accuracy;
+however, the extremely large percentage gains over Random are merely a mathematical artifact and should not be treated as statistical evidence.
 In terms of beyond-accuracy, the strongest hybrid is broader, more novel, and more serendipitous than Pop, but its ILD is slightly lower, indicating a mild trade-off between accuracy and diversity, and evaluation must be conducted metric by metric, with an appropriate reference, and by examining both absolute differences and relative changes.
 ```
 
-**Limitations.** These are descriptive differences on one split, without confidence intervals or significance tests. 
+**Limitations.** These are descriptive differences on one split, without confidence intervals or significance tests.
 
 **Reproduce:** `uv run python -m scripts.quantify_baselines`
 
-**Source outputs:** `results/task2/experiment3/baseline_comparison.csv` (352 model-baseline-metric comparisons), `ndcg_summary.csv`, `comparison.md`, and `protocol.json`.
+**Source outputs:** `results/task2/experiment3/baseline_comparison.csv` (416 model-baseline-metric comparisons across 13 metrics), `ndcg_summary.csv`, `comparison.md`, and `protocol.json`.
 
 ## Experiment 4 - Compare beyond-accuracy performance
 
-**Setup.** Rank all 18 fixed exports separately on catalogue Coverage@10, self-information Novelty@10, genre-Jaccard ILD@10, and relevance-weighted Serendipity@10. 
-Higher is better for each metric. Minimum ranks are shared by ties. 
-Report category leaders for baselines, individual models, and hybrids, and retain a Pareto frontier containing models that no other model exceeds on all four dimensions. 
+**Setup.** Rank all 18 fixed exports separately on catalogue Coverage@10, self-information Novelty@10, genre-Jaccard ILD@10, and relevance-weighted Serendipity@10.
+Higher is better for each metric. Minimum ranks are shared by ties.
+Report category leaders for baselines, individual models, and hybrids, and retain a Pareto frontier containing models that no other model exceeds on all four dimensions.
 
 **Category leaders.** Global rank is shown in parentheses.
 
@@ -224,17 +262,17 @@ Report category leaders for baselines, individual models, and hybrids, and retai
 | Feature Augmentation | Hybrid | 13 | 17 | 9 | 13 | No |
 | Meta-Level | Hybrid | 14 | 14 | 11 | 12 | No |
 
-**Discussion.** 
+**Discussion.**
 ```
-No model leads every beyond-accuracy dimension. 
+No model leads every beyond-accuracy dimension.
 
-FISM covers the most catalogue items and is the most novel non-random model, but ranks only 15th on serendipity as many unusual recommendations are not relevant test hits. 
+FISM covers the most catalogue items and is the most novel non-random model, but ranks only 15th on serendipity as many unusual recommendations are not relevant test hits.
 
-Feature Combination leads serendipity and all hybrids in coverage and novelty, suggesting that combining member scores with side features broadens the relevant recommendations. 
+Feature Combination leads serendipity and all hybrids in coverage and novelty, suggesting that combining member scores with side features broadens the relevant recommendations.
 
-Cascade has the highest hybrid ILD, while ItemKNN and Pop lead their categories: genre variety within a list can remain high even when catalogue coverage is narrow. 
+Cascade has the highest hybrid ILD, while ItemKNN and Pop lead their categories: genre variety within a list can remain high even when catalogue coverage is narrow.
 
-Random's novelty rank is not evidence of quality as it ranks last on serendipity, and its four repeated score rows make the baseline especially limited. 
+Random's novelty rank is not evidence of quality as it ranks last on serendipity, and its four repeated score rows make the baseline especially limited.
 
 14 models remain on the four-dimensional Pareto frontier, indicating clear trade-offs among different beyond-accuracy metrics, and no single model dominates all others across all four dimensions.
 
@@ -244,21 +282,21 @@ Random's novelty rank is not evidence of quality as it ranks last on serendipity
 - Serendipity considers both relevance and unexpectedness, and therefore comes closer to ‘useful novelty’.
 ```
 
-**Limitations.** Rankings describe one saved split and do not express uncertainty. 
+**Limitations.** Rankings describe one saved split and do not express uncertainty.
 
-**Reproduce:** `uv run python -m scripts.compare_beyond_accuracy`
+**Reproduce:** `uv run python -m scripts.task22.compare_beyond_accuracy`
 
 **Source outputs:** `results/task2/experiment4/summary.csv`, `metric_rankings.csv`, `category_leaders.csv`, `pareto_frontier.csv`, `comparison.md`, and `protocol.json`.
 
 ## Experiment 5 - Examine accuracy–beyond-accuracy trade-offs
 
-**Setup.** Use NDCG@10 as the primary accuracy measure and compare it separately with Coverage@10, Novelty@10, ILD@10, and Serendipity@10. 
+**Setup.** Use NDCG@10 as the primary accuracy measure and compare it separately with Coverage@10, Novelty@10, ILD@10, and Serendipity@10.
 
-Calculate Pearson linear correlation and Spearman rank correlation across 
-(1) all 18 exports 
-and (2) the 16 non-baseline models. 
+Calculate Pearson linear correlation and Spearman rank correlation across
+(1) all 18 exports
+and (2) the 16 non-baseline models.
 
-For each accuracy/beyond-accuracy pair, identify the two-dimensional Pareto frontier: a model remains when no other model is at least as high on both metrics and strictly higher on one. 
+For each accuracy/beyond-accuracy pair, identify the two-dimensional Pareto frontier: a model remains when no other model is at least as high on both metrics and strictly higher on one.
 Correlations are descriptive across configurations, without significance or causal claims.
 
 ![Accuracy and beyond-accuracy trade-offs](../results/task2/experiment5/tradeoffs.png)
@@ -281,24 +319,24 @@ Correlations are descriptive across configurations, without significance or caus
 | ILD@10 | Feature Combination, Weighted, EASE, SLIMElastic, ItemKNN |
 | Serendipity@10 | Feature Combination |
 
-**Discussion.** 
+**Discussion.**
 ```
-Across all 18 models, NDCG seems strongly positively related to coverage and ILD, and negatively related to novelty; 
-However, after removing Random and Pop, all three associations become weak (absolute Pearson at most 0.174 and absolute Spearman at most 0.147). 
+Across all 18 models, NDCG seems strongly positively related to coverage and ILD, and negatively related to novelty;
+However, after removing Random and Pop, all three associations become weak (absolute Pearson at most 0.174 and absolute Spearman at most 0.147).
 
-Random's extreme novelty and Pop's high ILD therefore drive much of the all-model pattern. 
+Random's extreme novelty and Pop's high ILD therefore drive much of the all-model pattern.
 
-The Pareto frontiers reveal actual choices: moving from Feature Combination toward FISM gains coverage or novelty while sacrificing NDCG, whereas moving toward ItemKNN gains ILD. 
+The Pareto frontiers reveal actual choices: moving from Feature Combination toward FISM gains coverage or novelty while sacrificing NDCG, whereas moving toward ItemKNN gains ILD.
 
 JC: The trade-off between accuracy and beyond-accuracy is existed, but it is between local models instead global.
 
-Feature Combination improves EASE by 0.0090 NDCG, 0.0523 coverage, 0.0630 novelty, and 0.0076 serendipity, while losing 0.0060 ILD. 
-JC: It alone leads both NDCG and serendipity, but this is **partly structural** as the serendipity formula multiplies unexpectedness by test hits,and feature combination has a higher NDCG (higher hits), thereforem serendipity is structurally higher. 
+Feature Combination improves EASE by 0.0090 NDCG, 0.0523 coverage, 0.0630 novelty, and 0.0076 serendipity, while losing 0.0060 ILD.
+JC: It alone leads both NDCG and serendipity, but this is **partly structural** as the serendipity formula multiplies unexpectedness by test hits,and feature combination has a higher NDCG (higher hits), thereforem serendipity is structurally higher.
 
 
-Thus, the local results show 
-- no general accuracy trade-off with coverage or novelty, 
-- a small accuracy–ILD tension, 
+Thus, the local results show
+- no general accuracy trade-off with coverage or novelty,
+- a small accuracy–ILD tension,
 - and a definition-dependent positive relationship with serendipity.
 ```
 **Limitations.** No confidence intervals or repeated-split tests are available, and pairwise frontiers ignore the other three beyond-accuracy dimensions. Serendipity is not statistically independent of accuracy under the implemented definition.
@@ -306,3 +344,31 @@ Thus, the local results show
 **Reproduce:** `uv run python -m scripts.analyze_tradeoffs`
 
 **Source outputs:** `results/task2/experiment5/correlations.csv`, `pairwise_frontiers.csv`, `reference_deltas.csv`, `tradeoffs.png`, `comparison.md`, and `protocol.json`.
+
+## Experiment 6 - Performance across K with user-bootstrap intervals
+
+**Setup.** Evaluate the same 18 saved model exports at K = 1, 3, 5, 10, and 20. Estimate 95% percentile confidence intervals from 10,000 bootstrap samples of test users drawn with replacement. Ranking and beyond-accuracy metrics are recalculated for every K. MAE and MSE are K-independent and are summarized once per model using finite test-pair predictions.
+
+**NDCG leaders by K.** Values are point estimates with 95% user-bootstrap confidence intervals.
+
+| K | Highest NDCG model | NDCG | 95% CI |
+| ---: | --- | ---: | ---: |
+| 1 | Tuned Mixed | 0.4146 | [0.3828, 0.4454] |
+| 3 | Tuned Weighted | 0.3548 | [0.3329, 0.3765] |
+| 5 | Tuned Mixed | 0.3411 | [0.3214, 0.3610] |
+| 10 | Tuned Feature Combination | 0.3399 | [0.3237, 0.3561] |
+| 20 | Tuned Feature Combination | 0.3589 | [0.3447, 0.3730] |
+
+The leading model changes with K, so a single cutoff does not describe the full ranking behaviour. The individual model with the lowest MAE and MSE remains NGCF: MAE 1.5148 (95% CI [1.4672, 1.5661]) and MSE 3.6855 (95% CI [3.4680, 3.9265]). These errors are descriptive because exported score scales are not consistently calibrated across models.
+
+![NDCG across K with 95% user-bootstrap intervals](../results/task2/repeated/plots/ndcg_by_k.png)
+
+**Interpretation and limitations.** These intervals quantify uncertainty from the sampled test users for the existing split and fixed exports. They do not measure variation from retraining models with new random seeds or generating new splits. Consequently, they support uncertainty statements about this test-user sample, not claims about run-to-run training stability or formal paired significance between models.
+
+**Reproduce:** `uv run python -m scripts.task22.task22_bootstrap --reps 10000`
+
+**Source outputs:** `results/task2/repeated/summary.csv` and `confidence_intervals.csv` (point estimates and 95% intervals), `plots/` (metric-versus-K charts), and `protocol.json` (bootstrap method and limits).
+
+## Optional extension - Repeated-seed evaluation
+
+Repeated-seed evaluation is not part of the current reported results. If required later, `scripts.task22.task22_seeds` can retrain the fixed Task 1 configurations for seeds 2020–2024, recompute Experiments 1–5 at K = 1, 3, 5, 10, and 20, and aggregate mean, standard deviation, and 95% Student-t intervals. Its intended output is `results/task2/repeated_seeds/`; no completed repeated-seed aggregate is currently available.
