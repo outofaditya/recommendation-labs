@@ -9,11 +9,12 @@ def top(scores, hidden):
     return np.argsort(-masked, axis=1, kind="stable")[:, :K]
 
 
-# users without relevant items are skipped as in recbole
-def accuracy(ranked, relevant):
+# per user quality where users without relevant items are skipped as in recbole
+def quality(ranked, relevant):
     hits = np.take_along_axis(relevant, ranked, axis=1)
     count = relevant.sum(axis=1)
-    hits, count = hits[count > 0], count[count > 0]
+    keep = count > 0
+    hits, count = hits[keep], count[keep]
     found = hits.any(axis=1)
     ideal = np.cumsum(DISCOUNT)[np.minimum(count, K) - 1]
     users = {
@@ -23,4 +24,9 @@ def accuracy(ranked, relevant):
         "hit@10": found,
         "precision@10": hits.sum(axis=1) / K,
     }
+    return keep, users
+
+
+def accuracy(ranked, relevant):
+    users = quality(ranked, relevant)[1]
     return {name: round(float(values.mean()), 4) for name, values in users.items()}

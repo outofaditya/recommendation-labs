@@ -36,3 +36,10 @@ def split(users, items):
         mask[frame.iloc[:, 0].map(rows), frame.iloc[:, 1].map(cols)] = True
         masks[name] = mask
     return masks
+
+
+# movie by genre indicators aligned with the score tables
+def genres(items):
+    frame = pd.read_csv("data/ml-100k/ml-100k.item", sep="\t", dtype=str)
+    labels = frame.set_index("item_id:token").loc[items, "class:token_seq"]
+    return labels.str.get_dummies(sep=" ").to_numpy(bool)
