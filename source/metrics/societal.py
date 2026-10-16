@@ -64,8 +64,8 @@ def miscalibration(ranked, hidden, genres):
     return kl(p, (1 - ALPHA) * q + ALPHA * p)
 
 
-# per user js of the list's head mid tail mix from the history's as in abdollahpouri et al
-def deviation(ranked, hidden):
+# user popularity deviation of abdollahpouri et al as the js of the list's head mid tail mix from the history's
+def upd(ranked, hidden):
     shares = np.eye(3)[tiers(hidden)]
     return js(profile(hidden, shares), shares[ranked].mean(axis=1))
 
@@ -75,9 +75,9 @@ def tail(ranked, hidden):
     return (tiers(hidden)[ranked] == 2).mean(axis=1)
 
 
-# per movie number of lists that show it
-def exposure(ranked, count):
-    return np.bincount(ranked.ravel(), minlength=count)
+# per movie exposure over all lists where each slot counts as its position discount
+def exposure(ranked, count, discount=1):
+    return np.bincount(ranked.ravel(), np.broadcast_to(discount, ranked.shape).ravel(), count)
 
 
 # inequality of exposure from 0 when every movie is shown equally to 1 when one movie takes all
@@ -85,3 +85,18 @@ def gini(exposure):
     total = np.cumsum(np.sort(exposure))
     n = len(exposure)
     return (n + 1 - 2 * total.sum() / total[-1]) / n
+
+
+# group recommendation unfairness of fu et al as the gap in mean quality between two user groups
+def gru(quality, first, second):
+    return abs(quality[first].mean() - quality[second].mean())
+
+
+# demographic parity of singh and joachims as the protected group's mean exposure over the rest's so 1 is fair
+def parity(exposure, protected):
+    return exposure[protected].mean() / exposure[~protected].mean()
+
+
+# disparate treatment of singh and joachims as parity of exposure per unit of relevance so 1 is fair
+def treatment(exposure, utility, protected):
+    return parity(exposure, protected) / parity(utility, protected)

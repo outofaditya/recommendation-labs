@@ -4,20 +4,24 @@ import numpy as np
 import pandas as pd
 from rerank import BASES, FOLDER, RERANKERS
 from source.data import genres, scores, split
-from source.metrics.accuracy import accuracy, top
-from source.metrics.societal import deviation, exposure, gini, ild, miscalibration, tail, tastes
+from source.metrics.accuracy import DISCOUNT, quality, top
+from source.metrics.societal import exposure, gini, gru, ild, miscalibration, parity, tail, tastes, tiers, treatment, upd
 
 TASTES = ["niche", "diverse", "blockbuster"]
 
 
-# every metric of a set of lists where hidden is what the lists could not show
+# every metric of a set of lists where hidden is what the lists could not show and the tail is the protected item group
 def measure(ranked, hidden, relevant, flags):
-    shown, drift, taste = exposure(ranked, hidden.shape[1]), deviation(ranked, hidden), tastes(hidden)
-    groups = {name: drift[taste == k].mean() for k, name in enumerate(TASTES)}
-    row = {"ndcg": accuracy(ranked, relevant)["ndcg@10"], "ild": ild(ranked, flags).mean()}
+    keep, users = quality(ranked, relevant)
+    ndcg, taste, protected = users["ndcg@10"], tastes(hidden), tiers(hidden) == 2
+    niche, blockbuster = taste == 0, taste == 2
+    shown, exposed, deviation = exposure(ranked, len(protected)), exposure(ranked, len(protected), DISCOUNT), upd(ranked, hidden)
+    row = {"ndcg": ndcg.mean(), "ild": ild(ranked, flags).mean()}
     row |= {"miscalibration": miscalibration(ranked, hidden, flags).mean(), "tail": tail(ranked, hidden).mean()}
-    row |= {"coverage": (shown > 0).mean(), "gini": gini(shown), "deviation": drift.mean()} | groups
-    row["gap"] = max(groups.values()) - min(groups.values())
+    row |= {"coverage": (shown > 0).mean(), "gini": gini(shown), "demographic_parity": parity(exposed, protected)}
+    row["disparate_treatment"] = treatment(exposed, relevant.sum(axis=0), protected)
+    row |= {"upd": deviation.mean()} | {f"upd_{name}": deviation[taste == k].mean() for k, name in enumerate(TASTES)}
+    row |= {"gru_upd": gru(deviation, niche, blockbuster), "gru_ndcg": gru(ndcg, niche[keep], blockbuster[keep])}
     return {name: round(float(value), 4) for name, value in row.items()}
 
 
