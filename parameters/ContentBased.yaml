@@ -1,0 +1,7 @@
+model: ContentBased
+dataset: ml-100k
+
+method: profile
+decade: 0.0
+idf: false
+k: null
