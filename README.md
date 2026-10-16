@@ -48,3 +48,4 @@ uv sync
 | **Task 3 — Societal Aspects**            |                                           |                                                                                                                         |
 | 3.1 – Re-Rankers                         | `uv run python scripts/rerank.py`         | Four re-rankers on three models for every lambda on validation and the chosen one on test in `results/rerank/`          |
 | 3.2 – Re-Ranked Evaluation               | `uv run python scripts/tradeoff.py`       | Accuracy and beyond-accuracy per lambda in `results/rerank/curves.csv` and before and after on test in `test.csv`       |
+| 3.3 – Re-Ranked Hybrid                   | `uv run python scripts/rerank_hybrid.py`  | Tuned Mixed with its members re-ranked before fusion or its list re-ranked after, curves, test and evidence in `results/rerank/hybrid/` |
