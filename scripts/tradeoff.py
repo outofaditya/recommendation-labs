@@ -2,12 +2,11 @@ import json
 
 import numpy as np
 import pandas as pd
+from source.analysis.groups import TASTES
 from rerank import BASES, FOLDER, RERANKERS
 from source.data import genres, scores, split
 from source.metrics.accuracy import DISCOUNT, quality, top
 from source.metrics.societal import exposure, gini, gru, ild, miscalibration, parity, tail, tastes, tiers, treatment, upd
-
-TASTES = ["niche", "diverse", "blockbuster"]
 
 
 # every metric of a set of lists where hidden is what the lists could not show and the tail is the protected item group

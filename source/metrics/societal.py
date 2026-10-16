@@ -42,12 +42,21 @@ def tiers(hidden):
     return tier
 
 
+# equal thirds by value with ties kept in their order
+def thirds(values):
+    third = np.empty(len(values), dtype=int)
+    third[np.argsort(values, kind="stable")] = np.arange(len(values)) * 3 // len(values)
+    return third
+
+
+# share of each user's history from head movies
+def head(hidden):
+    return profile(hidden, np.eye(3)[tiers(hidden)])[:, 0]
+
+
 # niche diverse and blockbuster users as equal thirds by the head share of their history
 def tastes(hidden):
-    head = profile(hidden, np.eye(3)[tiers(hidden)])[:, 0]
-    taste = np.empty(len(head), dtype=int)
-    taste[np.argsort(head, kind="stable")] = np.arange(len(head)) * 3 // len(head)
-    return taste
+    return thirds(head(hidden))
 
 
 # per user mean genre distance over every pair in the list
