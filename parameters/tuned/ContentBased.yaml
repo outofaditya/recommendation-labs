@@ -1,0 +1,6 @@
+model: ContentBased
+dataset: ml-100k
+method: knn
+decade: 1.0
+idf: true
+k: 400
