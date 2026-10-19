@@ -1,74 +1,74 @@
-# Task 2.4 — Explaining Hybrid Recommender Behaviour
+# Task 2.4 — Hybrid Behaviour and Long-Tail Analysis
 
-## Repeated-run design
+## Experimental setting
 
-The behavioural analyses were repeated for seeds 2020–2024. Each run rebuilt the fixed model set and repeated the routing, candidate, popularity, specialized-retrieval, and tail-interest analyses. Values are means over five runs; intervals are 95% Student-t intervals across runs. The activity and tail-interest groups are formed from training data in each run. These intervals summarize seed-to-seed variation and are not user-bootstrap intervals.
+The analyses use five runs (seeds 2020–2024), MovieLens 100K (943 users and 1,682 items), K=10, and fixed tuned Task 1 configurations. Means and 95% Student-t intervals are across runs. Routing evaluates per-user results for EASE, SLIMElastic, LightGCN, FISM, BPR, NeuMF, Weighted, and Combination. The candidate pipeline tests 8 generators × 6 individual rerankers × 5 depths (20, 50, 100, 200, and the full available pool). Popularity groups are defined by training counts: top 20%, next 30%, and bottom 50%. Tail-retrieval experiments start from Combination's top 100 unseen candidates, add 20 unique candidates from specialized sources, and use the same SLIMElastic scores to rerank every pool.
 
-## Per-user model preference and routing headroom
+## Experiment 1 — User-level routing and activity segments
 
-The oracle selects the best model for each user using that user's test outcomes. It is an upper bound, not an implementable routing policy.
+An oracle chooses the best model for each user using that user's test outcomes. It is an upper bound and cannot be deployed as a routing rule.
 
-| Measure | Mean | 95% CI |
+| NDCG@10 measure | Mean [95% CI] |
+| --- | ---: |
+| Per-user oracle across eight models | 0.4335 [0.4248, 0.4422] |
+| Combination | 0.3373 [0.3310, 0.3437] |
+| Oracle − Combination | 0.0961 [0.0933, 0.0990] |
+
+The largest per-user win share belongs to EASE (24.37% [23.43, 25.31]), followed by SLIMElastic (15.52% [13.54, 17.51]), LightGCN (13.72% [13.19, 14.25]), and NeuMF (13.43% [11.98, 14.87]). Preference varies by user, but this test-based oracle gap is not an estimate of achievable routing gain.
+
+By training activity, the highest mean segment NDCG comes from SLIMElastic in group 1 (0.2719), Weighted in groups 2–3 (0.2724 and 0.3053), and Combination in group 4 (0.5051). Their intervals overlap within the groups, so these point leaders do not establish a stable routing policy.
+
+## Experiment 2 — Candidate generation and reranking
+
+The highest mean NDCG in the 240-setting pipeline sweep is LightGCN retrieval at depth 20 followed by SLIMElastic reranking: NDCG@10 0.3332 [0.3259, 0.3406], candidate recall 0.3858 [0.3759, 0.3956], and conditional NDCG 0.3714. Combination retrieval at depth 20 with the same reranker has higher candidate recall (0.4097 [0.3998, 0.4196]) but lower NDCG (0.3316 [0.3234, 0.3399]). This test-split sweep is exploratory, not a validation-selected serving policy.
+
+## Experiment 3 — Popularity exposure
+
+The top 20% of items account for about 64.8% of training interactions, yet receive most top-10 recommendations. Values below are mean exposure shares over the five runs.
+
+| Model | Head exposure (top 20%) | Tail exposure (bottom 50%) |
 | --- | ---: | ---: |
-| Per-user oracle NDCG@10 | 0.4335 | [0.4248, 0.4422] |
-| Feature Combination NDCG@10 | 0.3373 | [0.3310, 0.3437] |
-| Oracle − Combination | 0.0961 | [0.0933, 0.0990] |
-
-EASE has the largest per-user win share at 24.4% [23.4%, 25.3%], followed by SLIMElastic at 15.5% [13.5%, 17.5%], LightGCN at 13.7% [13.2%, 14.3%], and NeuMF at 13.4% [12.0%, 14.9%]. The remaining wins are distributed among FISM, BPR, Combination, and Weighted. This consistent spread shows that the best model varies by user, but the oracle gap overstates attainable routing gains because it uses test outcomes.
-
-The leading model by mean segment NDCG changes with activity: SLIMElastic is narrowly highest in group 1 (0.2719), Weighted in groups 2 and 3 (0.2724 and 0.3053), and Combination in group 4 (0.5051). The leading models' intervals overlap within each segment, so the point leaders do not establish a robust gate.
-
-## Candidate retrieval and reranking
-
-In the candidate-pipeline sweep, the highest mean NDCG@10 was LightGCN retrieval at depth 20 followed by SLIMElastic reranking: 0.3332 [0.3259, 0.3406], with candidate recall 0.3858 [0.3759, 0.3956]. Combination retrieval at depth 20 with the same reranker had candidate recall 0.4097 [0.3998, 0.4196] and NDCG@10 0.3316 [0.3234, 0.3399]. These are exploratory comparisons across many pipeline configurations; they do not identify a validated serving policy.
-
-Retrieval changes do not guarantee changes in the final top ten. With a fixed SLIMElastic reranker, the Combination top-100 pool recovered 10.82% of relevant tail items among users with held-out tail items. Adding 20 unique candidates from LightGCN, NeuMF, or a genre-tail source, or combining LightGCN and genre-tail sources, increased mean tail candidate recall:
-
-| Candidate strategy | Tail candidate recall | Paired gain vs. base (95% CI) | NDCG@10 | Tail exposure in top 10 |
-| --- | ---: | ---: | ---: | ---: |
-| Combination top 100 (base) | 10.82% | — | 0.32890 | 0.0191% |
-| + LightGCN top 20 | 15.51% | +4.69 pp [3.96, 5.43] | 0.32888 | 0.0191% |
-| + NeuMF top 20 | 16.99% | +6.18 pp [5.69, 6.67] | 0.32890 | 0.0191% |
-| + Genre-preference tail top 20 | 15.94% | +5.13 pp [4.05, 6.20] | 0.32890 | 0.0191% |
-| + LightGCN and genre-tail | 20.22% | +9.40 pp [7.95, 10.85] | 0.32888 | 0.0191% |
-
-All additions left NDCG and tail exposure effectively unchanged under the fixed reranker. The added candidates were retrieved, but almost none reached the recommendation list: the base produced an average of 1.8 tail recommendations and 0.2 tail hits across 943 users per run. This points to reranking as the bottleneck in this experiment, rather than candidate availability alone. The tiny hit count also makes the tail-hit rate unstable.
-
-## Popularity exposure
-
-Items are grouped by training popularity: head is the top 20% (337 items), middle is the next 30% (504), and tail is the bottom 50% (841). Exposure is the share of top-ten recommendation positions assigned to a bucket.
-
-| Model | Head exposure | Tail exposure |
-| --- | ---: | ---: |
-| EASE | 98.66% | 0.00% |
+| EASE | 98.66% | 0.000% |
 | SLIMElastic | 98.26% | 0.019% |
-| Weighted | 98.19% | 0.019% |
-| Combination | 96.36% | 0.083% |
+| Weighted | 98.19% | 0.013% |
+| Combination | 96.36% | 0.081% |
 | LightGCN | 91.67% | 0.573% |
 | FISM | 92.12% | 0.250% |
-| NeuMF | 93.37% | 1.12% |
+| NeuMF | 93.37% | 1.122% |
 
-Even for the less head-concentrated neural models, tail items occupy a small fraction of recommendation positions. Strong overall NDCG therefore does not imply broad long-tail exposure.
+All selected models remain head-heavy; higher overall ranking accuracy does not imply substantial long-tail exposure.
 
-The following K-sweep plots show catalogue-level coverage and novelty for context. They summarize discovery breadth and item popularity, while the exposure table above directly measures head-versus-tail placement.
+The K-sweep plots below show catalogue-wide coverage and novelty, which describe discovery breadth and item popularity. The table above is the direct measure of head-versus-tail exposure.
 
-![Catalogue coverage by recommendation-list length](../results/task2/multiseed/aggregate/plots/coverage_by_k.png)
+![Catalogue coverage by recommendation-list length](plots/coverage_by_k.png)
 
-![Novelty by recommendation-list length](../results/task2/multiseed/aggregate/plots/novelty_by_k.png)
+![Novelty by recommendation-list length](plots/novelty_by_k.png)
 
-## Tail interest segments
+## Experiments 4–5 — Specialized tail retrieval and tail-interest groups
 
-Users were divided into quartiles by the share of their training interactions involving tail items. The union of LightGCN and genre-tail additions increased tail candidate recall over the Combination top-100 base in every quartile:
+The base candidate set is Combination's top 100. Adding 20 unique candidates increases catalogue coverage and tail candidate recall, but the fixed SLIMElastic reranker barely changes the final list:
 
-| Tail-interest quartile | Users with tail test items (mean) | Base tail candidate recall | + LightGCN and genre-tail | Change |
+| Candidate strategy | Candidate catalogue coverage | Tail candidate recall | Paired recall gain vs base [95% CI] | NDCG@10 | Tail exposure |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Combination top 100 | 69.58% | 10.82% | — | 0.32890 | 0.0191% |
+| + LightGCN top 20 | 76.62% | 15.51% | +4.69 pp [3.96, 5.43] | 0.32888 | 0.0191% |
+| + NeuMF top 20 | 81.90% | 16.99% | +6.18 pp [5.69, 6.67] | 0.32890 | 0.0191% |
+| + Genre-preference tail top 20 | 75.26% | 15.94% | +5.13 pp [4.05, 6.20] | 0.32890 | 0.0191% |
+| + LightGCN and genre-tail | 80.55% | 20.22% | +9.40 pp [7.95, 10.85] | 0.32888 | 0.0191% |
+
+Tail recall@10 does not change (mean 0.060%); the base produces only 1.8 tail recommendations and 0.2 tail hits per run across 943 users. Retrieval therefore finds relevant tail items that the fixed reranker rarely puts in the top ten. The extremely small tail-hit count makes the hit rate unstable.
+
+Tail candidate recall for the base and the LightGCN-plus-genre union, by users' training-time tail-interest quartile, is:
+
+| Tail-interest quartile | Users with tail test items (mean) | Base recall | Union recall | Change |
 | --- | ---: | ---: | ---: | ---: |
 | 1 (lowest interest) | 21 | 15.70% | 19.94% | +4.23 pp |
 | 2 | 65 | 2.45% | 9.25% | +6.80 pp |
 | 3 | 94 | 7.40% | 15.72% | +8.32 pp |
 | 4 (highest interest) | 146 | 16.02% | 28.02% | +12.01 pp |
 
-These averages show the largest retrieval gain among high-tail-interest users, but candidate additions did not materially change NDCG, top-ten tail exposure, or tail recall in the segments. Quartiles 1 and 2 have especially few users with held-out tail items, so their tail estimates are less informative.
+Retrieval gains are largest in the highest-interest group, but final NDCG and tail exposure remain effectively unchanged within groups. Groups 1 and 2 have few users with held-out tail items.
 
-## Interpretation and limits
+## Main result 
 
-The repeated runs confirm two distinct behaviours: model preference varies across users, and specialized retrieval expands the pool of relevant tail candidates. Yet the fixed ranking stage rarely promotes those extra candidates, and popularity exposure remains strongly concentrated in the head. A follow-up should evaluate a tail-aware reranker or ranking feature using validation-based selection and report the resulting accuracy cost. The oracle and the pipeline sweep are exploratory; neither establishes a deployable routing or retrieval policy. Five seeds remain a small sample. Full per-seed routing, candidate, popularity, and segment summaries are in [`results/task2/multiseed/aggregate/task24/`](../results/task2/multiseed/aggregate/task24/).
+Across these experiments, user preferences differ and additional sources improve tail candidate recall, but neither the oracle nor the candidate sweep establishes a deployable policy. The repeated runs show that the current fixed reranker is the bottleneck for converting added tail candidates into recommendations. A tail-aware ranking method should be evaluated with validation-based selection and its accuracy cost measured. 

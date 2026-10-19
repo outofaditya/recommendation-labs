@@ -1,12 +1,14 @@
-# Task 2.2 — Evaluation of Effectiveness
+# Task 2.2 — Effectiveness Evaluation
 
-## Repeated-run protocol
+## Experimental setting
 
-Results aggregate five runs (seeds 2020–2024) at K = 1, 3, 5, 10, and 20. Each run refits the nine tuned individual models and rebuilds the seven hybrid designs using the fixed reference hyperparameters; learned hybrid parameters are refit from that run's validation data. Tables below focus on K=10. Values are seed means; intervals are two-sided 95% Student-t intervals across the five runs. They describe run-to-run variability for this setup, not user-bootstrap intervals. The same test protocol is applied in each run.
+Five repeated runs (seeds 2020–2024) use MovieLens 100K (943 users and 1,682 items), the nine tuned Task 1 individual models, Random and Pop baselines, and seven tuned hybrid designs. The individual configurations and selected hybrid hyperparameters are fixed from Task 1; learned hybrid parameters are refit on each run's validation data. Each run evaluates the same ranking protocol at K = 1, 3, 5, 10, and 20. Ranking relevance is binary test interaction after hiding train and validation interactions. Results below are seed means with two-sided 95% Student-t intervals across five seeds; MAE/MSE are reported once per run on finite test-pair predictions and do not depend on K.
 
-## Ranking effectiveness at K=10
+## Experiments 1–2 — Individual and hybrid ranking quality
 
-| Model | Type | NDCG@10 (mean [95% CI]) | Recall@10 | Precision@10 | MRR@10 | Hit@10 | MAP@10 | F1@10 |
+K=10 results (NDCG intervals shown; the other columns are seed means):
+
+| Model | Type | NDCG@10 mean [95% CI] | Recall | Precision | MRR | Hit | MAP | F1 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Random | baseline | 0.0079 [0.0068, 0.0089] | 0.0058 | 0.0065 | 0.0197 | 0.0602 | 0.0029 | 0.0050 |
 | Pop | baseline | 0.1095 [0.0881, 0.1309] | 0.0947 | 0.0856 | 0.2081 | 0.4899 | 0.0508 | 0.0729 |
@@ -27,33 +29,44 @@ Results aggregate five runs (seeds 2020–2024) at K = 1, 3, 5, 10, and 20. Each
 | TunedAugmentation | hybrid | 0.2971 [0.2877, 0.3066] | 0.2514 | 0.1976 | 0.4925 | 0.7892 | 0.1815 | 0.1797 |
 | TunedMetalevel | hybrid | 0.3005 [0.2914, 0.3096] | 0.2509 | 0.2022 | 0.4927 | 0.7858 | 0.1859 | 0.1812 |
 
-Weighted is the leading hybrid at K=10, with Combination close behind; both exceed the best individual, SLIMElastic, by about 0.009 and 0.008 NDCG points respectively. Weighted also leads hybrid Recall, MRR, MAP, and F1, while Combination has the highest hybrid Hit@10. At other cutoffs, Weighted leads at K=1 and 3, Mixed narrowly leads at K=5, and Combination leads at K=20. Thus the preferred blend depends somewhat on list length, although these leaders are based on point means and the intervals overlap.
+Weighted and Combination are the strongest hybrids at K=10. Paired seed-by-seed differences against the strongest individual, SLIMElastic, are +0.00909 NDCG for Weighted (95% CI [0.00531, 0.01288]) and +0.00848 for Combination ([0.00362, 0.01334]). Weighted leads hybrid Recall, MRR, MAP, and F1; Combination leads hybrid Hit@10. Weighted has the highest hybrid mean at K=1, 3, and 10; Mixed is highest at K=5 and Combination at K=20. Weighted and Combination are not separated from each other at K=10: paired difference +0.00062 [−0.00162, 0.00285]. These paired intervals use only five seed pairs.
 
-![Mean NDCG by recommendation-list length across the five runs](../results/task2/multiseed/aggregate/plots/ndcg_by_k.png)
+![Mean NDCG by recommendation-list length across the five runs](plots/ndcg_by_k.png)
 
-The K sweep shows how the accuracy ranking changes with recommendation-list length; the table above gives the detailed K=10 comparison.
+## Experiment 3 — Difference from baselines
 
-## Beyond-accuracy results and trade-offs
+At K=10 every tuned hybrid exceeds Pop on mean NDCG. The strongest individual and top hybrids are:
 
-| Model | Coverage@10 | Novelty@10 | ILD@10 | Serendipity@10 |
-| --- | ---: | ---: | ---: | ---: |
-| LightGCN | 0.3740 | 8.7910 | 0.7852 | 0.1708 |
-| FISM | 0.3593 | 8.7637 | 0.8032 | 0.1567 |
-| TunedCombination | 0.2881 | 8.5959 | 0.8038 | 0.1845 |
-| TunedWeighted | 0.2411 | 8.5257 | 0.8068 | 0.1846 |
-| SLIMElastic | 0.2352 | 8.5400 | 0.8125 | 0.1791 |
-| TunedCascade | 0.2517 | 8.5614 | 0.8083 | 0.1808 |
+| Model | NDCG@10 difference vs Pop [95% CI] |
+| --- | ---: |
+| SLIMElastic | +0.21936 [0.20452, 0.23419] |
+| TunedWeighted | +0.22845 [0.21324, 0.24367] |
+| TunedCombination | +0.22784 [0.21206, 0.24361] |
+| TunedMixed | +0.22476 [0.20876, 0.24077] |
+| TunedCascade | +0.22189 [0.20593, 0.23784] |
 
-Among hybrids, Combination covers the largest share of the catalogue; Weighted has the highest mean serendipity, effectively tied with Combination. Individual LightGCN and FISM have higher coverage and novelty, while EASE and SLIMElastic have higher intra-list diversity than the hybrids. Accuracy and catalogue coverage have only a weak positive association across non-baseline configurations at K=10 (mean Pearson r=0.12); novelty and ILD correlations are also weak. Serendipity correlates strongly with NDCG (r=0.99), but this metric includes relevance and should not be interpreted as independent evidence of diversity.
+Random's near-zero NDCG makes relative percentage improvements misleading; absolute differences are the useful comparison. The separate Random coverage diagnostic is described below.
 
-![Catalogue coverage by recommendation-list length](../results/task2/multiseed/aggregate/plots/coverage_by_k.png)
+## Experiments 4–5 — Beyond-accuracy results and trade-offs
 
-![Novelty by recommendation-list length](../results/task2/multiseed/aggregate/plots/novelty_by_k.png)
+At K=10, the strongest non-baseline individual and hybrid for each dimension are:
 
-![Serendipity by recommendation-list length](../results/task2/multiseed/aggregate/plots/serendipity_by_k.png)
+| Metric | Strongest individual | Strongest hybrid |
+| --- | --- | --- |
+| Coverage | LightGCN 0.3740 | Combination 0.2881 |
+| Novelty | LightGCN 8.7910 | Combination 8.5959 |
+| ILD | SLIMElastic 0.8125 | Cascade 0.8083 |
+| Serendipity | SLIMElastic 0.1791 | Weighted 0.1846 |
 
-Across the five runs, Weighted and Combination are the most consistent high-accuracy hybrid choices at K=10. No model leads every beyond-accuracy dimension, so selection depends on whether accuracy, catalogue coverage, diversity, or serendipity is the priority. Relative percentage gains over Random are omitted because its near-zero NDCG makes them misleading.
+Combination has the broadest catalogue coverage among hybrids; Weighted and Combination have nearly identical serendipity. Across non-baseline models, K=10 Pearson correlations with NDCG are weak for coverage (r=0.121, 95% CI [0.017, 0.226]), novelty (r=0.052, [−0.052, 0.156]), and ILD (r=0.038, [−0.116, 0.192]). Serendipity is strongly correlated (r=0.991, [0.987, 0.995]), but it includes relevance and is not independent evidence of diversity. The four-dimensional Pareto analysis places Weighted and Combination on the frontier in all five runs; neither dominates every dimension.
 
-## Uncertainty and interpretation
+![Catalogue coverage by recommendation-list length](plots/coverage_by_k.png)
 
-The aggregate reports seed mean, sample standard deviation, and 95% Student-t interval. Five runs are still a small sample, and both split generation and training randomness vary across seeds. Hybrid hyperparameters remain fixed from the reference selection; these results measure repeatability under those choices rather than uncertainty from retuning. Intervals are descriptive and overlapping intervals do not establish formal pairwise equivalence or difference. Per-seed metrics, baseline contrasts, ranks, frontiers, and correlations are in [`results/task2/multiseed/aggregate/`](../results/task2/multiseed/aggregate/).
+![Novelty by recommendation-list length](plots/novelty_by_k.png)
+
+![Serendipity by recommendation-list length](plots/serendipity_by_k.png)
+
+**Random Coverage check.** Random mean Coverage@10 is 0.0372, versus about 99.6% expected if 943 users independently drew ten items uniformly from 1,682. That calculation assumes independent per-user draws. The saved Random export has only four distinct score rows for 943 users, so that assumption does not hold for this export. Coverage is the number of distinct top-10 items across evaluated users divided by catalogue size, after train/validation items are hidden. Interpret the 0.0372 as a property of the saved Random ranking/export, not independent per-user random sampling; the current results do not establish why the score rows repeat.
+
+For explicit-rating prediction, NGCF has the lowest mean MAE (1.5510 [1.5093, 1.5926]) and MSE (3.8317 [3.6566, 4.0068]). These pointwise errors use finite test-pair predictions only, so hybrid values with different prediction coverage are not direct same-coverage comparisons.
+
