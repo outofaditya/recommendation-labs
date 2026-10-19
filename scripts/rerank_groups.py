@@ -41,13 +41,15 @@ def shares(ranked, count, group):
     return {"exposure": exposed[group].sum() / exposed.sum(), "coverage": (shown[group] > 0).mean()}
 
 
-def userwise(groups, before, after):
+# group means of history and test size show whether a grouping still mixes in activity
+def userwise(groups, sizes, before, after):
     for dimension, (labels, group) in groups.items():
         for k, label in enumerate(labels):
             rows = group == k
+            info = {"side": "user", "dimension": dimension, "group": label, "size": int(rows.sum())}
+            info |= {name: values[rows].mean() for name, values in sizes.items()}
             for metric in before:
-                info = {"side": "user", "dimension": dimension, "group": label, "size": int(rows.sum()), "metric": metric}
-                yield info | paired(before[metric][rows], after[metric][rows])
+                yield info | {"metric": metric} | paired(before[metric][rows], after[metric][rows])
 
 
 def itemwise(groups, original, ranked, relevant):
@@ -69,17 +71,18 @@ def tables():
         masks, flags = split(users, items), genres(items)
         seen, relevant = masks["train"] | masks["valid"], masks["test"]
         crowds, shelves = people(seen, users), movies(seen, items)
+        sizes = {"history": seen.sum(axis=1), "tests": relevant.sum(axis=1)}
         original = top(values, seen)
         before = card(original, seen, relevant, flags)
         for name in RERANKERS:
             ranked = np.load(FOLDER / "ranked" / f"{base}-{name}.npz")["test"]
             lam = json.loads((FOLDER / "metrics" / f"{base}-{name}.json").read_text())["lambda"]
-            found = [*userwise(crowds, before, card(ranked, seen, relevant, flags)), *itemwise(shelves, original, ranked, relevant)]
+            found = [*userwise(crowds, sizes, before, card(ranked, seen, relevant, flags)), *itemwise(shelves, original, ranked, relevant)]
             rows += [{"model": base, "reranker": name, "lambda": lam} | row for row in found]
     table = pd.DataFrame(rows)
     tested = table.p.notna()
     table.loc[tested, "q"] = false_discovery_control(table.p[tested])
-    return table.round({"before": 4, "after": 4, "change": 4})
+    return table.round({"before": 4, "after": 4, "change": 4, "history": 1, "tests": 1})
 
 
 if __name__ == "__main__":

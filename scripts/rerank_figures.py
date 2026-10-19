@@ -55,7 +55,7 @@ def save(figure, name):
 
 # one panel per re-ranker with validation ndcg relative to no re-ranking so the 5% budget is one line for every series
 def tradeoff(curves, by, labels, name):
-    figure, axes = plt.subplots(2, 2, figsize=(6.3, 4.4))
+    figure, axes = plt.subplots(2, 2, figsize=(6.3, 3.6))
     for ax, (reranker, (metric, label, lower)) in zip(axes.flat, TARGETS.items()):
         for color, (key, text) in zip(SERIES, labels.items()):
             line = curves[(curves[by] == key) & (curves.reranker == reranker)].sort_values("lambda")
@@ -70,8 +70,7 @@ def tradeoff(curves, by, labels, name):
         ax.set_xlabel(label)
         if lower:
             ax.invert_xaxis()
-    for ax in axes[:, 0]:
-        ax.set_ylabel("Validation NDCG@10 change (%)")
+    figure.supylabel("Validation NDCG@10 change (%)", fontsize=9)
     handles = axes[0, 0].get_legend_handles_labels()
     figure.legend(*handles, loc="upper center", ncol=len(labels), frameon=False, bbox_to_anchor=(0.5, 1.03))
     figure.tight_layout(rect=(0, 0, 1, 0.97))
@@ -81,7 +80,7 @@ def tradeoff(curves, by, labels, name):
 # share of position weighted exposure per movie tier with the tail on the baseline so its growth reads from zero
 def exposure(groups, name):
     tiers = groups[(groups.dimension == "tier") & (groups.metric == "exposure")]
-    figure, axes = plt.subplots(len(BASES), 1, figsize=(6.3, 3.6), sharex=True)
+    figure, axes = plt.subplots(len(BASES), 1, figsize=(6.3, 3.1), sharex=True)
     for ax, base in zip(axes, BASES):
         frame = tiers[tiers.model == base].set_index(["reranker", "group"])
         bars = {"Original": frame.xs(next(iter(RERANKERS)))["before"]} | {NAMES[r]: frame.xs(r)["after"] for r in RERANKERS}

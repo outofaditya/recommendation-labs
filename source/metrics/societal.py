@@ -15,6 +15,11 @@ def js(p, q):
     return (kl(p, m) + kl(q, m)) / 2
 
 
+# shannon entropy of each distribution so a wider mix scores higher
+def entropy(p):
+    return -np.sum(p * np.log(np.where(p > 0, p, 1)), axis=-1)
+
+
 # share of genres two movies have in common
 def jaccard(genres):
     flags = genres.astype(np.float32)

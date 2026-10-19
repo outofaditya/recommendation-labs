@@ -6,21 +6,26 @@ TASTES = ["niche", "diverse", "blockbuster"]
 TIERS = ["head", "mid", "tail"]
 ACTIVITY = ["low", "mid-low", "mid-high", "high"]
 POPULARITY = ["long-tail", "low-mid", "high-mid", "head"]
+STRATA = 20
 
 
-# equal sized quartiles with ties ranked in id order as the qcut of 2.5 does
-def quartiles(values, ids):
+# equal sized bands with ties ranked in id order as the qcut of 2.5 does
+def bands(values, ids, count):
     rank = np.empty(len(values))
     rank[np.lexsort((ids.astype(int), values))] = np.arange(1, len(values) + 1)
-    return pd.qcut(rank, 4, labels=False)
+    return pd.qcut(rank, count, labels=False)
 
 
-# taste thirds drawn inside each activity quartile so every taste group holds the same mix of activity
+def quartiles(values, ids):
+    return bands(values, ids, 4)
+
+
+# taste thirds drawn inside twenty activity bands since inside quartiles niche users still held more test items
 def stratified(hidden, ids):
-    share, level = head(hidden), quartiles(hidden.sum(axis=1), ids)
+    share, level = head(hidden), bands(hidden.sum(axis=1), ids, STRATA)
     taste = np.empty(len(share), dtype=int)
-    for q in range(4):
-        taste[level == q] = thirds(share[level == q])
+    for band in range(STRATA):
+        taste[level == band] = thirds(share[level == band])
     return taste
 
 
