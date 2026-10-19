@@ -6,8 +6,10 @@ from rerank import BASES, FOLDER, RERANKERS
 from source.data import genres, scores, split
 from source.analysis.groups import movies, people
 from source.metrics.accuracy import DISCOUNT, quality, top
-from scipy.stats import false_discovery_control, wilcoxon
 from source.metrics.societal import exposure, ild, miscalibration, tail, upd
+
+SAMPLES = 1000
+SEED = 2020
 
 
 # per user quality of a set of lists with nan where a metric skips the user
@@ -27,12 +29,13 @@ def recall(ranked, relevant, group):
     return values
 
 
-# the same users before and after where wilcoxon drops the users re-ranking leaves unchanged
+# the same users before and after with a 95% bootstrap interval over users for the mean change
 def paired(before, after):
     both = np.isfinite(before) & np.isfinite(after)
     change = after[both] - before[both]
-    p = wilcoxon(change).pvalue if change.any() else 1.0
-    return {"before": before[both].mean(), "after": after[both].mean(), "change": change.mean(), "p": p}
+    draws = np.random.default_rng(SEED).integers(0, len(change), size=(SAMPLES, len(change)))
+    low, high = np.percentile(change[draws].mean(axis=1), [2.5, 97.5])
+    return {"before": before[both].mean(), "after": after[both].mean(), "change": change.mean(), "low": low, "high": high}
 
 
 # share of position weighted exposure a movie group gets and the share of it shown at all
@@ -60,7 +63,7 @@ def itemwise(groups, original, ranked, relevant):
             yield info | {"metric": "recall"} | paired(recall(original, relevant, mask), recall(ranked, relevant, mask))
             old, new = shares(original, count, mask), shares(ranked, count, mask)
             for metric in old:
-                yield info | {"metric": metric, "before": old[metric], "after": new[metric], "change": new[metric] - old[metric], "p": np.nan}
+                yield info | {"metric": metric, "before": old[metric], "after": new[metric], "change": new[metric] - old[metric]}
 
 
 # every chosen re-ranking on test against its model's original lists per user and movie group
@@ -80,9 +83,7 @@ def tables():
             found = [*userwise(crowds, sizes, before, card(ranked, seen, relevant, flags)), *itemwise(shelves, original, ranked, relevant)]
             rows += [{"model": base, "reranker": name, "lambda": lam} | row for row in found]
     table = pd.DataFrame(rows)
-    tested = table.p.notna()
-    table.loc[tested, "q"] = false_discovery_control(table.p[tested])
-    return table.round({"before": 4, "after": 4, "change": 4, "history": 1, "tests": 1})
+    return table.round({"before": 4, "after": 4, "change": 4, "low": 4, "high": 4, "history": 1, "tests": 1})
 
 
 if __name__ == "__main__":
