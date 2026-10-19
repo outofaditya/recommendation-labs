@@ -53,6 +53,7 @@ def evidence(base):
     row = {"model": base} | {f"pool_{name}": (tier[pool] == k).mean() for k, name in enumerate(TIERS)}
     row |= {f"history_{name}": share for name, share in zip(TIERS, profile(seen, np.eye(3)[tier]).mean(axis=0))}
     row |= {"tail_movies": tails.mean(), "no_tail": (tails == 0).mean(), "entropy_history": entropy(history).mean()}
+    row |= {f"no_tail_{name}": (tails[tastes(seen) == k] == 0).mean() for k, name in enumerate(TASTES)}
     lists = {"original": top(values, seen), "mmr": np.load(FOLDER / "ranked" / f"{base}-MMR.npz")["test"]}
     for name, ranked in lists.items():
         mix = shares[ranked].mean(axis=1)
