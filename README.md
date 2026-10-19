@@ -50,4 +50,4 @@ uv sync
 | 3.2 – Re-Ranked Evaluation               | `uv run python scripts/tradeoff.py`       | Accuracy and beyond-accuracy per lambda in `results/rerank/curves.csv`, before and after on test in `test.csv` and what each top 100 holds in `evidence.csv` |
 | 3.3 – Re-Ranked Hybrid                   | `uv run python scripts/rerank_hybrid.py`  | Tuned Mixed with its members re-ranked before fusion or its list re-ranked after, curves, test and evidence in `results/rerank/hybrid/` |
 | 3.4 – Re-Ranker Impact per Group         | `uv run python scripts/rerank_groups.py`  | Test change per user group and movie group with 95% bootstrap intervals for every chosen re-ranking in `results/rerank/groups.csv` |
-| 3.2 to 3.4 – Figures                     | `uv run python scripts/rerank_figures.py` | Trade-off, hybrid order and tier exposure figures as PNG in `report/figures/` |
+| 3.2 to 3.4 – Figures                     | `uv run python scripts/rerank_figures.py` | Trade-off, hybrid order and group impact figures as PNG in `report/figures/` |

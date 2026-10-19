@@ -8,6 +8,8 @@ FIGURES = Path("report") / "figures"
 INK, SECONDARY, MUTED, GRID, AXIS = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]
 TIERS = {"tail": "#86b6ef", "mid": "#3987e5", "head": "#1c5cab"}
+# taste groups are ordered so they take one orange ramp light to dark beside the blue movie tiers
+TASTES = {"niche": "#f0956a", "diverse": "#e0602b", "blockbuster": "#a3401a"}
 NAMES = {"MMR": "MMR", "Calibrated": "Steck", "xQuAD": "xQuAD", "CP": "CP"}
 # each re-ranker's own target with lower-is-better axes reversed so improvement always points right
 TARGETS = {
@@ -77,31 +79,45 @@ def tradeoff(curves, by, labels, name):
     save(figure, name)
 
 
-# share of position weighted exposure per movie tier with the tail on the baseline so its growth reads from zero
-def exposure(groups, name):
-    tiers = groups[(groups.dimension == "tier") & (groups.metric == "exposure")]
-    figure, axes = plt.subplots(len(BASES), 1, figsize=(6.3, 3.1), sharex=True)
-    for ax, base in zip(axes, BASES):
-        frame = tiers[tiers.model == base].set_index(["reranker", "group"])
-        bars = {"Original": frame.xs(next(iter(RERANKERS)))["before"]} | {NAMES[r]: frame.xs(r)["after"] for r in RERANKERS}
-        for y, (label, share) in enumerate(bars.items()):
-            left = 0
-            for tier, color in TIERS.items():
-                ax.barh(y, share[tier], left=left, height=0.62, color=color, edgecolor="white", linewidth=1, label=tier if y == 0 else None)
-                left += share[tier]
-            ax.text(1.01, y, f"tail {100 * share['tail']:.1f}%", va="center", ha="left", fontsize=7.5, color=SECONDARY)
-        ax.set_yticks(range(len(bars)), list(bars))
-        ax.set_title(base, loc="left")
-        ax.set_xlim(0, 1)
-        ax.invert_yaxis()
-        ax.tick_params(length=0)
-        ax.grid(axis="y", visible=False)
-        ax.spines["left"].set_visible(False)
-    axes[-1].xaxis.set_major_formatter(lambda value, _: f"{100 * value:.0f}%")
-    axes[-1].set_xlabel("Share of position-weighted test exposure")
-    handles = axes[0].get_legend_handles_labels()
-    figure.legend(*handles, loc="upper center", ncol=3, frameon=False, bbox_to_anchor=(0.5, 1.02), title=None)
-    figure.tight_layout(rect=(0, 0, 0.93, 0.96))
+# each re-ranker's mean change per group with its 95% interval, groups ordered light to dark
+def dots(ax, rows, colors, label):
+    for k, reranker in enumerate(RERANKERS):
+        for j, (group, color) in enumerate(colors.items()):
+            row = rows[(rows.reranker == reranker) & (rows.group == group)].iloc[0]
+            spread = [[row.change - row.low], [row.high - row.change]]
+            ax.errorbar(
+                row.change,
+                k + (j - 1) * 0.22,
+                xerr=spread,
+                fmt="o",
+                color=color,
+                markersize=5.5,
+                markeredgecolor="white",
+                markeredgewidth=1.2,
+                elinewidth=1.3,
+                capsize=0,
+                label=group if k == 0 else None,
+            )
+    ax.axvline(0, color=AXIS, linewidth=0.8, zorder=1)
+    ax.set_yticks(range(len(RERANKERS)), [NAMES[r] for r in RERANKERS])
+    ax.set_ylim(len(RERANKERS) - 0.5, -0.5)
+    ax.tick_params(axis="y", length=0)
+    ax.grid(axis="y", visible=False)
+    ax.spines["left"].set_visible(False)
+    ax.set_xlabel(label)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.1), ncol=3, frameon=False, handletextpad=0.2, columnspacing=0.8)
+
+
+# who pays per user group beside whose relevant movies are still found per movie group so one figure covers both sides of 3.4
+def impact(groups, base, name):
+    figure, (users, movies) = plt.subplots(1, 2, figsize=(6.3, 2.7), sharey=True)
+    rows = groups[groups.model == base]
+    dots(users, rows[(rows.dimension == "taste within activity") & (rows.metric == "ndcg")], TASTES, "NDCG@10 change per user")
+    dots(movies, rows[(rows.dimension == "tier") & (rows.metric == "recall")], TIERS, "Recall@10 change on the tier's test movies")
+    movies.tick_params(axis="y", labelleft=False)
+    users.set_title(f"Users ({base}): who pays", loc="left")
+    movies.set_title(f"Movies ({base}): whose relevant films are found", loc="left")
+    figure.tight_layout(w_pad=2.5)
     save(figure, name)
 
 
@@ -109,5 +125,5 @@ if __name__ == "__main__":
     tradeoff(pd.read_csv(FOLDER / "curves.csv"), "model", {base: base for base in BASES}, "rerank-tradeoff")
     pipelines = {"Members": "Re-rank members, then fuse", "Hybrid": "Fuse, then re-rank"}
     tradeoff(pd.read_csv(FOLDER / "hybrid" / "curves.csv"), "pipeline", pipelines, "rerank-hybrid")
-    exposure(pd.read_csv(FOLDER / "groups.csv"), "rerank-exposure")
+    impact(pd.read_csv(FOLDER / "groups.csv"), "EASE", "rerank-impact")
     print("figures in", FIGURES)
