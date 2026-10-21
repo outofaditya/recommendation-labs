@@ -24,9 +24,9 @@ class RecommenderDataLoader:
         if self._npz_file is not None:
             self._npz_file.close()
 
-    def load_predictions(self, npz_filename: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def load_predictions(self, npz_filename: str, npz_dir: str = "scores") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Loads the users, items, and scores from the NPZ archive."""
-        filepath = self.base_dir / "scores" / npz_filename
+        filepath = self.base_dir / npz_dir / npz_filename
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Prediction file not found: {filepath}")
 
