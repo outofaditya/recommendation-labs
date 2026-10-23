@@ -28,9 +28,6 @@ report/*.fdb_latexmk
 
 #Task2.2
 tests/*
-!tests/task22/
-tests/task22/*
-!tests/task22/test_multiseed.py
 
 # Task2.3
 # report/note_task2.3.md
@@ -44,3 +41,6 @@ scripts/slurm
 parameters/delftblue_gpu.yaml
 docs/task2_multiseed.md
 seeds-task2
+split.tar
+tuned_predictions.tar.gz
+scripts/task2_multiseed.py

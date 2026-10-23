@@ -14,17 +14,16 @@ parameters/        RecBole Model Configurations
 report/            Working Notes and LaTeX Report
 results/           Generated Outputs · Ignored
 scripts/           Runnable Entry Points per Task
-  task23/           Hybrid Coefficient, Ablation, and Contribution Analysis
 source/
   analysis/        Coefficient and Group Analysis
   hybrids/         Task 1 Hybrid Recommenders
-  metrics/         Task 2 Ranking, Rating-Prediction, and Beyond-Accuracy Metrics
+  metrics/         Task 2 Accuracy and Beyond-Accuracy Metrics
   reranking/       Task 3 Re-Rankers
 ```
 
 ## Simulate
 
-Run from the repository root in this order. Every step writes to `results/`; the main experiments share one seeded split, while Task 1 seed inference and the Task 2.2 repeated-seed suite draw a new split per seed. Steps use all cores by default and `--workers` caps them. RecBole uses a GPU when one is present which matters for FISM and NGCF whose tuning takes hours on CPU.
+Run from the repository root in this order. Every step writes to `results/` and shares one seeded split except seed inference which draws a new split per seed. Steps use all cores by default and `--workers` caps them. RecBole uses a GPU when one is present which matters for FISM and NGCF whose tuning takes hours on CPU.
 
 ```bash
 uv sync
@@ -44,6 +43,12 @@ uv sync
 | 2.2 – Regenerate RecBole Split           | `uv run python -m scripts.task22.save_split --config parameters/tuned/BPR.yaml --output results/split` | Recreate train/validation/test TSVs with the course RecBole implementation and the configured seed; no model training |
 | 2.2 – Core Evaluation (Experiments 1–5) | `uv run python -m scripts.task22.task22_pipeline --ks 10` | Run the complete fixed-export evaluation in one reproducible command; outputs are written to `results/task2/experiment1/` through `experiment5/` |
 | 2.2 – K Sweep and Uncertainty             | `uv run python -m scripts.task22.task22_bootstrap --reps 10000` | Evaluate K = 1, 3, 5, 10, 20 and user-bootstrap 95% confidence intervals for all 18 saved exports in `results/task2/repeated/` |
-| 2.2 – Optional Repeated-Seed Experiments    | `caffeinate -dimsu uv run python -m scripts.task22.task22_seeds --workers 4` | Optional retraining over seeds 2020–2024 for run-to-run uncertainty; not required for the current reported results |
+| 2.2–2.4 – Repeated-Seed Experiments | See the multi-seed workflow below | Retrain seeds 2020–2024, refit hybrids, run all three tasks, and aggregate seed-level uncertainty in `results/task2/multiseed/aggregate/` |
 | 2.3 – Hybrid Contribution Analysis       | `uv run python -m scripts.task23.analyze_contributions` | Analyze Weighted coefficients and regularization, run leave-one-member-out ablations, and interpret Mixed, Switching, Cascade, and Feature Combination; outputs go to `results/task23/` |
-| **Task 3 — Societal Aspects**            |                                           |                                                                                           
+| 2.4 – Hybrid Behaviour and Long Tail | `uv run python -m scripts.task24.task24_pipeline` | User-level routing, candidate-depth comparisons, popularity exposure, specialized tail retrieval, and tail-interest segments in `results/task24/` |                   |
+| **Task 3 — Societal Aspects**            |                                           |                                                                                                                         |
+| 3.1 – Re-Rankers                         | `uv run python scripts/rerank.py`         | Four re-rankers on three models for every lambda on validation and the chosen one on test in `results/rerank/`          |
+| 3.2 – Re-Ranked Evaluation               | `uv run python scripts/tradeoff.py`       | Accuracy and beyond-accuracy per lambda in `results/rerank/curves.csv`, before and after on test in `test.csv` and what each top 100 holds in `evidence.csv` |
+| 3.3 – Re-Ranked Hybrid                   | `uv run python scripts/rerank_hybrid.py`  | Tuned Mixed with its members re-ranked before fusion or its list re-ranked after, curves, test and evidence in `results/rerank/hybrid/` |
+| 3.4 – Re-Ranker Impact per Group         | `uv run python scripts/rerank_groups.py`  | Test change per user group and movie group with 95% bootstrap intervals for every chosen re-ranking in `results/rerank/groups.csv` |
+| 3.2 to 3.4 – Figures                     | `uv run python scripts/rerank_figures.py` | Trade-off, hybrid order and group impact figures as PNG in `report/figures/` |
