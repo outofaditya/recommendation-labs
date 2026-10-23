@@ -45,9 +45,10 @@ def build(reference_metrics: Path):
     table, details = switching(x, masks, count)
     save("TunedSwitching", table, users, items, details | {"group_count": count})
 
-    # Task 1's selected configuration is depth=2, learning_rate=0.1.
-    table, details = combination(x, masks, depth=2, rate=0.1)
-    save("TunedCombination", table, users, items, details | {"depth": 2, "rate": 0.1})
+    settings = reference("Combination")
+    depth, rate = settings["depth"], float(settings["rate"])
+    table, details = combination(x, masks, depth=depth, rate=rate)
+    save("TunedCombination", table, users, items, details | {"depth": depth, "rate": rate})
 
     settings = reference("Augmentation")
     table, details = augmentation(x, masks, int(settings["pseudo"]), int(settings["k"]))

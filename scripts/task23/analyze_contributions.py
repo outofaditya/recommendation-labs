@@ -10,8 +10,8 @@ import matplotlib
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 
-from scripts.hybrids import groups, pairs, ranks, shortlisted
-from source.data import RESULTS
+from scripts.hybrids import groups, pair_feature_blocks, pairs, ranks, shortlisted
+from source.data import split
 from source.hybrids.pool import MEMBERS, candidates, folds
 from source.metrics.accuracy import accuracy, top
 
@@ -19,7 +19,7 @@ GRID = [10.0**power for power in range(-7, 1)]
 K = 10
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from source import data
+from source.hybrids.side import load_side
 
 
 def load_data(results):
@@ -27,14 +27,7 @@ def load_data(results):
     users, items = tables[0]["users"], tables[0]["items"]
     if any(not (np.array_equal(t["users"], users) and np.array_equal(t["items"], items)) for t in tables):
         raise ValueError("Individual score exports do not share identical user and item order")
-    user_rows = {value: index for index, value in enumerate(users)}
-    item_cols = {value: index for index, value in enumerate(items)}
-    masks = {}
-    for name in ("train", "valid", "test"):
-        frame = pd.read_csv(results / "split" / f"{name}.tsv", sep="\t", dtype=str)
-        mask = np.zeros((len(users), len(items)), dtype=bool)
-        mask[frame.iloc[:, 0].map(user_rows), frame.iloc[:, 1].map(item_cols)] = True
-        masks[name] = mask
+    masks = split(users, items, results)
     raw = np.stack([t["scores"] for t in tables], axis=-1).astype(np.float64)
     outside_train = ~masks["train"][..., None]
     mean = raw.mean(axis=1, keepdims=True, where=outside_train)
@@ -56,11 +49,11 @@ def weighted_rank(x, mask, hidden, relevant, weights):
     return ndcg(np.where(mask, x @ weights, -np.inf), hidden, relevant)
 
 
-def weighted_cv(x, masks, keep, c, user_folds):
+def weighted_cv(x, masks, keep, c, user_folds, depth):
     sub = x[..., keep]
     values, fold_weights = [], []
+    pool = candidates(sub, masks["train"], depth)
     for held in user_folds:
-        pool = candidates(sub, masks["train"])
         train_rows = pool.copy()
         train_rows[held] = False
         weights = fit_weights(sub[train_rows], masks["valid"][train_rows], c)
@@ -69,12 +62,13 @@ def weighted_cv(x, masks, keep, c, user_folds):
     return float(np.mean(values)), np.asarray(fold_weights)
 
 
-def coefficient_and_ablation(x, masks, out):
+def coefficient_and_ablation(x, masks, out, depth, selected_c):
     user_folds = folds(len(x))
     all_members = np.arange(len(MEMBERS))
     reg_rows, coef_rows = [], []
-    for c in GRID:
-        score, weights = weighted_cv(x, masks, all_members, c, user_folds)
+    for c in sorted(set(GRID + [selected_c])):
+        print(f"Weighted regularization C={c:g}, depth={depth}", flush=True)
+        score, weights = weighted_cv(x, masks, all_members, c, user_folds, depth)
         reg_rows.append({"C": c, "cv_ndcg@10": score})
         for index, name in enumerate(MEMBERS):
             coef_rows.append(
@@ -87,14 +81,15 @@ def coefficient_and_ablation(x, masks, out):
                 }
             )
 
-    selected_c = max(reg_rows, key=lambda row: row["cv_ndcg@10"])["C"]
-    baseline, _ = weighted_cv(x, masks, all_members, selected_c, user_folds)
+    sweep_best_c = max(reg_rows, key=lambda row: row["cv_ndcg@10"])["C"]
+    baseline, full_fold_weights = weighted_cv(x, masks, all_members, selected_c, user_folds, depth)
     ablations = []
     fixed_ablations = []
-    full_pool = candidates(x, masks["train"])
+    full_pool = candidates(x, masks["train"], depth)
     for removed, name in enumerate(MEMBERS):
+        print(f"Weighted ablation: remove {name}", flush=True)
         keep = all_members[all_members != removed]
-        score, _ = weighted_cv(x, masks, keep, selected_c, user_folds)
+        score, _ = weighted_cv(x, masks, keep, selected_c, user_folds, depth)
         ablations.append({"removed_member": name, "cv_ndcg@10": score, "full_minus_ablated": baseline - score})
 
         # Fixed-weight ablation keeps the full candidate pool and the fold's
@@ -102,10 +97,8 @@ def coefficient_and_ablation(x, masks, out):
         # to zero. This separates direct score contribution from refitting
         # compensation by correlated members.
         values = []
-        for held in user_folds:
-            train_rows = full_pool.copy()
-            train_rows[held] = False
-            weights = fit_weights(x[train_rows], masks["valid"][train_rows], selected_c)
+        for fold_index, held in enumerate(user_folds):
+            weights = full_fold_weights[fold_index].copy()
             weights[removed] = 0.0
             values.append(weighted_rank(x[held], full_pool[held], masks["train"][held], masks["valid"][held], weights))
         fixed_score = float(np.mean(values))
@@ -117,7 +110,7 @@ def coefficient_and_ablation(x, masks, out):
             }
         )
 
-    final_pool = candidates(x, masks["train"])
+    final_pool = candidates(x, masks["train"], depth)
     final_weights = fit_weights(x[final_pool], masks["valid"][final_pool], selected_c)
     magnitude = np.abs(final_weights)
     total = magnitude.sum()
@@ -139,7 +132,10 @@ def coefficient_and_ablation(x, masks, out):
     pd.DataFrame(ablations).sort_values("full_minus_ablated", ascending=False).to_csv(out / "weighted_leave_one_out.csv", index=False)
     pd.DataFrame(fixed_ablations).sort_values("full_minus_ablated", ascending=False).to_csv(out / "weighted_fixed_weight_ablation.csv", index=False)
     return {
+        "model": "TunedWeighted",
+        "depth": depth,
         "selected_C": selected_c,
+        "diagnostic_sweep_best_C": sweep_best_c,
         "cv_ndcg@10": baseline,
         "coefficients": final,
         "ablation": ablations,
@@ -148,9 +144,9 @@ def coefficient_and_ablation(x, masks, out):
     }
 
 
-def correlation_analysis(x, masks, out):
+def correlation_analysis(x, masks, out, depth):
     """Measure redundancy between standardized member scores on candidates."""
-    pool = candidates(x, masks["train"])
+    pool = candidates(x, masks["train"], depth)
     matrix = np.corrcoef(x[pool].T)
     rows = []
     for i, left in enumerate(MEMBERS):
@@ -162,7 +158,7 @@ def correlation_analysis(x, masks, out):
     image = ax.imshow(matrix, vmin=-1, vmax=1, cmap="coolwarm")
     ax.set_xticks(range(len(MEMBERS)), MEMBERS, rotation=90)
     ax.set_yticks(range(len(MEMBERS)), MEMBERS)
-    ax.set_title("Member score correlation on the Weighted candidate pool")
+    ax.set_title("Member score correlation on the TunedWeighted candidate pool")
     fig.colorbar(image, ax=ax, label="Pearson correlation")
     fig.tight_layout()
     fig.savefig(out / "member_score_correlations.png", dpi=180)
@@ -170,13 +166,14 @@ def correlation_analysis(x, masks, out):
     return {"candidate_rows": int(pool.sum()), "matrix": matrix.tolist()}
 
 
-def activity_analysis(x, masks, out):
+def activity_analysis(x, masks, out, depth, selected_c):
     """Evaluate Weighted and individual models by user-history group."""
     user_groups = groups(masks, 4)
     user_folds = folds(len(x))
-    pool = candidates(x, masks["train"])
+    pool = candidates(x, masks["train"], depth)
     rows = []
     for group_index, user_group in enumerate(user_groups, start=1):
+        print(f"Activity analysis {group_index}/{len(user_groups)}", flush=True)
         full_scores, member_scores = [], {name: [] for name in MEMBERS}
         for held in user_folds:
             held_group = np.intersect1d(held, user_group, assume_unique=False)
@@ -184,7 +181,7 @@ def activity_analysis(x, masks, out):
                 continue
             train_rows = pool.copy()
             train_rows[held] = False
-            weights = fit_weights(x[train_rows], masks["valid"][train_rows], 0.0001)
+            weights = fit_weights(x[train_rows], masks["valid"][train_rows], selected_c)
             full_scores.append(weighted_rank(x[held_group], pool[held_group], masks["train"][held_group], masks["valid"][held_group], weights))
             for index, name in enumerate(MEMBERS):
                 member_scores[name].append(ndcg(x[held_group, :, index], masks["train"][held_group], masks["valid"][held_group]))
@@ -208,16 +205,16 @@ def activity_analysis(x, masks, out):
     return rows
 
 
-def activity_specific_weight_analysis(x, masks, out):
+def activity_specific_weight_analysis(x, masks, out, depth, selected_c):
     """Fit and evaluate a separate Weighted policy for each activity group."""
     user_groups = groups(masks, 4)
     user_folds = folds(len(x))
-    pool = candidates(x, masks["train"])
-    selected_c = 0.0001
+    pool = candidates(x, masks["train"], depth)
     performance = []
     coefficient_rows = []
 
     for group_index, user_group in enumerate(user_groups, start=1):
+        print(f"Activity analysis {group_index}/{len(user_groups)}", flush=True)
         group_mask = np.zeros(len(x), dtype=bool)
         group_mask[user_group] = True
         group_values, global_values = [], []
@@ -292,15 +289,15 @@ def activity_specific_weight_analysis(x, masks, out):
     }
 
 
-def activity_marginal_analysis(x, masks, out):
+def activity_marginal_analysis(x, masks, out, depth, selected_c):
     """Measure each member's marginal value separately within each activity group."""
     user_groups = groups(masks, 4)
     user_folds = folds(len(x))
     all_members = np.arange(len(MEMBERS))
-    selected_c = 0.0001
     rows = []
 
     for group_index, user_group in enumerate(user_groups, start=1):
+        print(f"Activity analysis {group_index}/{len(user_groups)}", flush=True)
         group_mask = np.zeros(len(x), dtype=bool)
         group_mask[user_group] = True
         counts = masks["train"][user_group].sum(axis=1)
@@ -308,8 +305,8 @@ def activity_marginal_analysis(x, masks, out):
         for removed, removed_name in enumerate(MEMBERS):
             keep = all_members[all_members != removed]
             sub = x[..., keep]
-            group_pool = candidates(sub, masks["train"])
-            full_pool = candidates(x, masks["train"])
+            group_pool = candidates(sub, masks["train"], depth)
+            full_pool = candidates(x, masks["train"], depth)
             full_values, ablated_values = [], []
 
             for held in user_folds:
@@ -364,8 +361,8 @@ def activity_marginal_analysis(x, masks, out):
     return rows
 
 
-def mixed_analysis(x, masks):
-    metadata = json.loads((RESULTS / "hybrid" / "metrics" / "TunedMixed.json").read_text())
+def mixed_analysis(x, masks, results):
+    metadata = json.loads((results / "hybrid" / "metrics" / "TunedMixed.json").read_text())
     members = metadata["members"]
     idx = [MEMBERS.index(name) for name in members]
     hidden, relevant = masks["train"], masks["valid"]
@@ -380,8 +377,8 @@ def mixed_analysis(x, masks):
     return {"members": members, "k": metadata["k"], "validation_ndcg@10": base, "ablation": rows}
 
 
-def switching_analysis(x, masks):
-    config = json.loads((RESULTS / "hybrid" / "metrics" / "TunedSwitching.json").read_text())
+def switching_analysis(x, masks, results):
+    config = json.loads((results / "hybrid" / "metrics" / "TunedSwitching.json").read_text())
     user_groups = groups(masks, len(config["groups"]))
     result = []
     for users, detail in zip(user_groups, config["groups"]):
@@ -403,8 +400,8 @@ def switching_analysis(x, masks):
     return result
 
 
-def cascade_analysis(x, masks):
-    config = json.loads((RESULTS / "hybrid" / "metrics" / "TunedCascade.json").read_text())
+def cascade_analysis(x, masks, results):
+    config = json.loads((results / "hybrid" / "metrics" / "TunedCascade.json").read_text())
     first, second = (x[..., MEMBERS.index(name)] for name in config["stages"])
     hidden, relevant, size = masks["train"], masks["valid"], config["shortlist"]
     shortlist = np.argsort(np.where(hidden, np.inf, -first), axis=1, kind="stable")[:, :size]
@@ -420,27 +417,27 @@ def cascade_analysis(x, masks):
     return {"stages": config["stages"], "shortlist": size, "validation_relevant_candidate_recall": candidate_recall, "variants": rows}
 
 
-def combination_analysis(x, masks):
+def combination_analysis(x, masks, settings, side_features):
     train, valid = masks["train"], masks["valid"]
     pool = candidates(x, train)
     owners = np.nonzero(pool)[0]
-    member_rows = pairs(x, train)
+    member_rows = pairs(x, train, side_features)
     full_rows = member_rows(pool)
-    score_count = len(MEMBERS)
-    # Feature blocks are defined by pairs(): member scores, user attributes/activity, movie genres/year/popularity.
-    user_end = score_count + 3
+    score_count = x.shape[-1]
+    blocks = pair_feature_blocks(score_count, side_features)
     variants = {
-        "All member scores and user/movie side features": np.arange(full_rows.shape[1]),
-        "Member scores only": np.arange(score_count),
-        "Member scores plus user features": np.arange(user_end),
-        "Member scores plus movie features": np.r_[0:score_count, user_end : full_rows.shape[1]],
+        "All member scores and user/movie side features": np.r_[blocks["scores"], blocks["user"], blocks["movie"]],
+        "Member scores only": blocks["scores"],
+        "Member scores plus user features": np.r_[blocks["scores"], blocks["user"]],
+        "Member scores plus movie features": np.r_[blocks["scores"], blocks["movie"]],
     }
     rows = []
     for name, columns in variants.items():
         fold_scores = []
-        for held in folds(len(x)):
+        for fold_index, held in enumerate(folds(len(x)), 1):
+            print(f"Combination ablation: {name}, fold {fold_index}/5", flush=True)
             train_rows = ~np.isin(owners, held)
-            model = HistGradientBoostingClassifier(max_depth=2, learning_rate=0.1, random_state=2020)
+            model = HistGradientBoostingClassifier(max_depth=settings["depth"], learning_rate=float(settings["rate"]), random_state=2020)
             # Occupation is categorical only when it remains in the selected user-feature block.
             category = np.flatnonzero(columns == score_count + 2)
             model.set_params(categorical_features=category.tolist() if len(category) else None)
@@ -453,33 +450,41 @@ def combination_analysis(x, masks):
 
 
 def run(results=Path("results"), output=Path("results/task23")):
-    global RESULTS
-    RESULTS = Path(results)
-    data.RESULTS = RESULTS
+    results = Path(results)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    x, masks, _, _ = load_data(RESULTS)
+    x, masks, users, items = load_data(results)
+    weighted_settings = json.loads((results / "hybrid/metrics/TunedWeighted.json").read_text())
+    combination_settings = json.loads((results / "hybrid/metrics/TunedCombination.json").read_text())
+    depth, selected_c = int(weighted_settings["depth"]), float(weighted_settings["C"])
+    weighted = coefficient_and_ablation(x, masks, output, depth, selected_c)
     summary = {
         "protocol": {
-            "split": str(RESULTS / "split"),
+            "split": str(results / "split"),
             "folds": 5,
             "fold_seed": 2020,
             "k": K,
             "primary_metric": "NDCG@10",
+            "weighted_model": {"name": "TunedWeighted", "depth": depth, "C": selected_c},
+            "combination_model": {"depth": combination_settings["depth"], "rate": combination_settings["rate"]},
+            "selection_bias": "Mixed, Cascade and Switching diagnostics reuse the validation labels that selected them and are optimistic in-sample descriptions, not unbiased held-out estimates. The C sweep and Combination CV also reuse hyperparameter-selection data; no nested-CV claim is made.",
             "test_usage": "No Task 2.3 model fitting, member selection, or ablation uses test labels.",
         },
-        "weighted": coefficient_and_ablation(x, masks, output),
-        "correlations": correlation_analysis(x, masks, output),
-        "weighted_by_activity": activity_analysis(x, masks, output),
-        "activity_specific_weights": activity_specific_weight_analysis(x, masks, output),
-        "activity_marginal_contribution": activity_marginal_analysis(x, masks, output),
-        "mixed": mixed_analysis(x, masks),
-        "switching": switching_analysis(x, masks),
-        "cascade": cascade_analysis(x, masks),
-        "feature_combination": combination_analysis(x, masks),
+        "weighted": weighted,
+        "correlations": correlation_analysis(x, masks, output, depth),
+        "weighted_by_activity": activity_analysis(x, masks, output, depth, selected_c),
+        "activity_specific_weights": activity_specific_weight_analysis(x, masks, output, depth, selected_c),
+        "activity_marginal_contribution": activity_marginal_analysis(x, masks, output, depth, selected_c),
+        "mixed": mixed_analysis(x, masks, results),
+        "switching": switching_analysis(x, masks, results),
+        "cascade": cascade_analysis(x, masks, results),
+        "feature_combination": combination_analysis(x, masks, combination_settings, load_side(users, items)),
     }
     (output / "summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n")
-    pd.DataFrame(summary["switching"]).to_csv(output / "switching_by_user_group.csv", index=False)
+    pd.DataFrame(summary["switching"]).assign(activity_group=lambda frame: np.arange(1, len(frame) + 1)).to_csv(
+        output / "switching_by_user_group.csv", index=False
+    )
+    pd.DataFrame(summary["mixed"]["ablation"]).to_csv(output / "mixed_member_ablation.csv", index=False)
     pd.DataFrame(summary["cascade"]["variants"]).to_csv(output / "cascade_stages.csv", index=False)
     pd.DataFrame(summary["feature_combination"]).to_csv(output / "combination_feature_ablation.csv", index=False)
     print(json.dumps({k: v for k, v in summary.items() if k != "protocol"}, indent=2))

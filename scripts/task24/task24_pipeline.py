@@ -24,6 +24,9 @@ import matplotlib
 import numpy as np
 import pandas as pd
 
+from source.data import split
+from source.metrics.accuracy import ndcg_per_user, top
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -58,37 +61,17 @@ def load_exports(results: Path) -> tuple[np.ndarray, np.ndarray, dict[str, np.nd
 
 def load_masks(results: Path, users: np.ndarray, items: np.ndarray) -> dict[str, np.ndarray]:
     """Build dense split masks aligned with the saved score exports."""
-    user_index = {str(value): index for index, value in enumerate(users)}
-    item_index = {str(value): index for index, value in enumerate(items)}
-    masks = {}
-    for split in ("train", "valid", "test"):
-        frame = pd.read_csv(results / "split" / f"{split}.tsv", sep="\t", dtype=str)
-        mask = np.zeros((len(users), len(items)), dtype=bool)
-        for row in frame.itertuples(index=False):
-            user, item = str(row[0]), str(row[1])
-            if user in user_index and item in item_index:
-                mask[user_index[user], item_index[item]] = True
-        masks[split] = mask
-    return masks
+    return split(users, items, results)
 
 
 def unseen_top(scores: np.ndarray, hidden: np.ndarray, k: int) -> np.ndarray:
     """Return top-k unseen item indices using stable exported-column tie order."""
-    masked = np.where(hidden, -np.inf, scores)
-    return np.argsort(-masked, axis=1, kind="stable")[:, :k]
+    return top(scores, hidden, k)
 
 
 def per_user_ndcg(scores: np.ndarray, hidden: np.ndarray, relevant: np.ndarray, k: int = K) -> np.ndarray:
-    """Return one NDCG value per eligible user, retaining zero-hit users."""
-    ranked = unseen_top(scores, hidden, k)
-    hits = np.take_along_axis(relevant, ranked, axis=1)
-    discounts = 1.0 / np.log2(np.arange(2, k + 2))
-    counts = relevant.sum(axis=1)
-    ideal = np.cumsum(discounts)[np.minimum(counts, k) - 1]
-    values = np.zeros(len(scores), dtype=float)
-    eligible = counts > 0
-    values[eligible] = (hits[eligible] * discounts).sum(axis=1) / ideal[eligible]
-    return values
+    """Return NDCG in original user order, including zero for ineligible users."""
+    return ndcg_per_user(top(scores, hidden, k), relevant)
 
 
 def bootstrap_mean_difference(values: np.ndarray, reps: int = BOOTSTRAP_REPS, seed: int = 2020) -> tuple[float, float, float]:
@@ -144,7 +127,7 @@ def experiment_routing(tables, masks, features, output: Path) -> dict:
     hidden = masks["train"] | masks["valid"]
     relevant = masks["test"]
     eligible = relevant.any(axis=1)
-    features = features.loc[eligible].copy()
+    features = features.loc[eligible].reset_index(drop=True).copy()
     user_values = {name: per_user_ndcg(tables[name], hidden, relevant)[eligible] for name in ANALYSIS_MODELS}
     matrix = np.column_stack([user_values[name] for name in ANALYSIS_MODELS])
     best_index = matrix.argmax(axis=1)
@@ -210,14 +193,17 @@ def candidate_pool(scores: np.ndarray, hidden: np.ndarray, depth: int) -> np.nda
     ranked = unseen_top(scores, hidden, min(depth, scores.shape[1]))
     pool = np.zeros_like(unseen)
     np.put_along_axis(pool, ranked, True, axis=1)
-    return pool
+    return pool & unseen
 
 
-def rerank(scores: np.ndarray, pool: np.ndarray, hidden: np.ndarray, k: int = K) -> np.ndarray:
+def rerank(scores: np.ndarray, pool: np.ndarray, hidden: np.ndarray, k: int = K, eligible: np.ndarray | None = None) -> np.ndarray:
     """Rank the top-k items from an externally supplied candidate pool."""
-    allowed = pool & ~hidden
-    ranked = np.argsort(-np.where(allowed, scores, -np.inf), axis=1, kind="stable")[:, :k]
-    return ranked
+    allowed = pool & ~hidden & np.isfinite(scores)
+    # Refuse short lists rather than score excluded items as recommendations.
+    counts = allowed.sum(axis=1)
+    if np.any((counts if eligible is None else counts[eligible]) < k):
+        raise ValueError(f"Fewer than {k} finite unseen reranking candidates")
+    return top(scores, ~allowed, k)
 
 
 def experiment_candidates(tables, masks, output: Path) -> dict:
@@ -233,12 +219,9 @@ def experiment_candidates(tables, masks, output: Path) -> dict:
             relevant_in_pool = (relevant & pool)[eligible].sum(axis=1)
             candidate_recall = relevant_in_pool / relevant_total
             for ranker in RERANKERS:
-                ranked = rerank(tables[ranker], pool, hidden, K)
+                ranked = rerank(tables[ranker], pool, hidden, K, eligible=eligible)
                 available = pool & np.isfinite(tables[ranker]) & ~hidden
-                hits = np.take_along_axis(relevant, ranked, axis=1)[eligible]
-                discounts = 1.0 / np.log2(np.arange(2, K + 2))
-                ideal = np.cumsum(discounts)[np.minimum(relevant_total, K) - 1]
-                ndcg = (hits * discounts).sum(axis=1) / ideal
+                ndcg = ndcg_per_user(ranked, relevant)[eligible]
                 conditional = ndcg[candidate_recall > 0]
                 rows.append(
                     {
@@ -247,7 +230,7 @@ def experiment_candidates(tables, masks, output: Path) -> dict:
                         "depth": "full" if depth == 0 else depth,
                         "eligible_users": len(ndcg),
                         "candidate_recall": float(candidate_recall.mean()),
-                        "candidate_catalogue_coverage": float(pool.any(axis=0).mean()),
+                        "candidate_catalogue_coverage": float(pool[eligible].any(axis=0).mean()),
                         "ranker_available_fraction": float(available[eligible].sum() / pool[eligible].sum() if pool[eligible].sum() else 0.0),
                         "ndcg@10": float(ndcg.mean()),
                         "conditional_ndcg@10": float(conditional.mean()) if len(conditional) else 0.0,
@@ -292,18 +275,15 @@ def experiment_popularity(tables, masks, items: np.ndarray, output: Path) -> dic
     top_items = []
     for name in ANALYSIS_MODELS:
         ranked = unseen_top(tables[name], hidden, K)
-        top_items.append(ranked)
+        top_items.append(ranked[eligible])
         for bucket in ("head_top20pct", "middle_20_50pct", "tail_bottom50pct"):
             item_mask = labels == bucket
             bucket_relevant = relevant & item_mask[None, :]
             bucket_total = bucket_relevant[eligible].sum(axis=1)
             hits = np.take_along_axis(bucket_relevant, ranked, axis=1)[eligible]
-            discounts = 1.0 / np.log2(np.arange(2, K + 2))
-            total_relevant = relevant[eligible].sum(axis=1)
-            ideal = np.cumsum(discounts)[np.minimum(total_relevant, K) - 1]
-            bucket_ndcg = (hits * discounts).sum(axis=1) / ideal
+            bucket_ndcg = ndcg_per_user(ranked, bucket_relevant, counts=relevant.sum(axis=1))[eligible]
             bucket_recall = np.divide(hits.sum(axis=1), bucket_total, out=np.zeros(len(hits)), where=bucket_total > 0)
-            exposure = np.mean(labels[ranked] == bucket)
+            exposure = np.mean(labels[ranked[eligible]] == bucket)
             rows.append(
                 {
                     "model": name,
@@ -435,7 +415,7 @@ def evaluate_candidate_strategy(
     hidden = masks["train"] | masks["valid"]
     relevant = masks["test"]
     eligible = relevant.any(axis=1)
-    ranked = rerank(reranker, pool, hidden, K)
+    ranked = rerank(reranker, pool, hidden, K, eligible=eligible)
     ranked = ranked[eligible]
     relevant_users = relevant[eligible]
     tail_relevant = relevant_users & tail_items[None, :]
@@ -447,17 +427,14 @@ def evaluate_candidate_strategy(
     overall_hits = np.take_along_axis(relevant_users, ranked, axis=1).sum(axis=1)
     overall_total = relevant_users.sum(axis=1)
     overall_recall = np.divide(overall_hits, overall_total, out=np.zeros(len(overall_hits)), where=overall_total > 0)
-    discounts = 1.0 / np.log2(np.arange(2, K + 2))
-    ideal = np.cumsum(discounts)[np.minimum(overall_total, K) - 1]
-    hits = np.take_along_axis(relevant_users, ranked, axis=1)
-    ndcg = (hits * discounts).sum(axis=1) / ideal
+    ndcg = ndcg_per_user(ranked, relevant_users)
     tail_masked = relevant_users & tail_items[None, :]
     tail_candidate_users = total_tail > 0
     output = {
         "strategy": name,
         "candidate_items_mean": float(pool[eligible].sum(axis=1).mean()),
         "candidate_items_median": float(np.median(pool[eligible].sum(axis=1))),
-        "candidate_catalogue_coverage": float(pool.any(axis=0).mean()),
+        "candidate_catalogue_coverage": float(pool[eligible].any(axis=0).mean()),
         "tail_candidate_recall": float(candidate_recall[tail_candidate_users].mean()) if tail_candidate_users.any() else 0.0,
         "users_with_tail_candidates": int(((pool[eligible] & tail_items[None, :]).sum(axis=1) > 0).sum()),
         "ndcg@10": float(ndcg.mean()),
@@ -509,7 +486,6 @@ def experiment_specialized_retrieval(
         rows.append(summary)
         user_ids = np.flatnonzero(masks["test"].any(axis=1))
         relevant_users = masks["test"][user_ids]
-        hidden = (masks["train"] | masks["valid"])[user_ids]
         tail_relevant_users = relevant_users & tail_items[None, :]
         tail_test_counts = tail_relevant_users.sum(axis=1)
         candidate_tail_counts = (pool[user_ids] & tail_relevant_users).sum(axis=1)
@@ -519,10 +495,7 @@ def experiment_specialized_retrieval(
             out=np.zeros(len(user_ids), dtype=float),
             where=tail_test_counts > 0,
         )
-        all_test_counts = relevant_users.sum(axis=1)
-        discounts = 1.0 / np.log2(np.arange(2, K + 2))
-        ideal = np.cumsum(discounts)[np.minimum(all_test_counts, K) - 1]
-        ndcg_user = (np.take_along_axis(relevant_users, ranked_eligible, axis=1) * discounts).sum(axis=1) / ideal
+        ndcg_user = ndcg_per_user(ranked_eligible, relevant_users)
         for local_index, user_index in enumerate(user_ids):
             per_user_rows.append(
                 {

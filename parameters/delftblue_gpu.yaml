@@ -1,0 +1,5 @@
+# Applied after a model's base or tuned YAML with scripts.export_scores --config.
+# Slurm exposes one allocated GPU to this job as CUDA device 0.
+use_gpu: true
+gpu_id: 0
+show_progress: false

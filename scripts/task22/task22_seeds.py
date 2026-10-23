@@ -15,7 +15,7 @@ from scripts.task22.task22_pipeline import run_pipeline
 
 SEEDS = (2020, 2021, 2022, 2023, 2024)
 KS = (1, 3, 5, 10, 20)
-LOWER_IS_BETTER = {"mae", "mse"}
+RATING_METRICS = {"mae", "mse", "rmse"}
 METRIC_NAMES = ("ndcg", "recall", "precision", "mrr", "hit", "map", "f1", "coverage", "novelty", "ild", "serendipity")
 REPO = Path(__file__).resolve().parents[2]
 
@@ -41,8 +41,12 @@ def _prepare_workdir(workdir):
 
 
 def run_seed(seed, workdir, ks, workers, reference_metrics):
+    workdir = Path(workdir).resolve()
     marker = workdir / "seed_complete.json"
     if marker.exists():
+        saved = json.loads(marker.read_text())
+        if saved.get("protocol_version") != 2 or not saved.get("complete") or saved.get("ks") != list(ks) or saved.get("seed") != seed:
+            raise ValueError("Legacy or incompatible seed marker; use a new output directory")
         print(f"Seed {seed} already complete; skipping training and evaluation.", flush=True)
         return
     _prepare_workdir(workdir)
@@ -69,45 +73,48 @@ def run_seed(seed, workdir, ks, workers, reference_metrics):
     _run([python, "-m", "scripts.models", "--tuned", "--seed", str(seed), "--workers", "1", "--models", "FISM"], workdir, env)
     _run([python, "-m", "scripts.task22.build_task22_repeat_hybrids", "--reference-metrics", str(reference_metrics)], workdir, env)
 
-    task_root = Path("results/task2/repeated_task22")
+    task_root = workdir / "results/task2/repeated_task22"
     run_pipeline(
-        results=Path("results"),
+        results=workdir / "results",
         output_root=task_root,
         ks=ks,
-        items=Path("data/ml-100k/ml-100k.item"),
-        interactions=Path("data/ml-100k/ml-100k.inter"),
+        items=workdir / "data/ml-100k/ml-100k.item",
     )
     for k in ks:
         print(f"Seed {seed}: all Task 2.2 experiments complete at K={k}.", flush=True)
 
-    marker.write_text(json.dumps({"seed": seed, "ks": list(ks), "complete": True}, indent=2) + "\n")
+    marker.write_text(json.dumps({"protocol_version": 2, "seed": seed, "ks": list(ks), "complete": True}, indent=2) + "\n")
 
 
 def _read_per_seed(root, seeds, ks):
+    def table(task_root, experiment, k, name):
+        folder = task_root / experiment
+        return pd.read_csv((folder / f"k_{k}" if len(ks) > 1 else folder) / name)
+
     metric_rows, baseline_rows, rank_rows, pareto_rows, correlation_rows, frontier_rows = [], [], [], [], [], []
     for seed in seeds:
         task_root = root / "runs" / f"seed_{seed}" / "results/task2/repeated_task22"
-        if not (root / "runs" / f"seed_{seed}" / "seed_complete.json").exists():
+        marker = root / "runs" / f"seed_{seed}" / "seed_complete.json"
+        if not marker.exists():
             raise RuntimeError(f"Seed {seed} is incomplete; aggregate only after all requested seeds finish")
+        saved = json.loads(marker.read_text())
+        if saved.get("protocol_version") != 2 or not saved.get("complete") or saved.get("seed") != seed or saved.get("ks") != list(ks):
+            raise ValueError(f"Seed {seed} has a legacy or incompatible marker; rerun in a new output directory")
         for experiment in ("experiment1", "experiment2"):
             for k in ks:
-                frame = pd.read_csv(task_root / experiment / f"k_{k}/summary.csv")
+                frame = table(task_root, experiment, k, "summary.csv")
                 if "category" not in frame:
                     frame["category"] = np.where(frame.model.isin(["Random", "Pop"]), "baseline", "individual")
                 for column in (c for c in frame.columns if c not in ("model", "category")):
                     metric = column.rsplit("@", 1)[0] if "@" in column else column
-                    if metric in LOWER_IS_BETTER:
-                        if k != 10:
-                            continue
-                        k_value = "all"
-                    else:
-                        k_value = k
+                    if metric in RATING_METRICS:
+                        continue
                     for row in frame[["model", "category", column]].itertuples(index=False, name=None):
                         metric_rows.append(
                             {
                                 "seed": seed,
                                 "experiment": experiment,
-                                "k": k_value,
+                                "k": k,
                                 "model": row[0],
                                 "category": row[1],
                                 "metric": metric,
@@ -115,57 +122,58 @@ def _read_per_seed(root, seeds, ks):
                             }
                         )
 
-                e3 = pd.read_csv(task_root / "experiment3" / f"k_{k}/baseline_comparison.csv")
-                for row in e3.itertuples(index=False):
-                    if row.metric in LOWER_IS_BETTER and k != 10:
-                        continue
-                    baseline_rows.append(
-                        {
-                            "seed": seed,
-                            "k": "all" if row.metric in LOWER_IS_BETTER else k,
-                            "model": row.model,
-                            "category": row.category,
-                            "baseline": row.baseline,
-                            "metric": row.metric,
-                            "absolute_difference": row.absolute_difference,
-                            "relative_change_percent": row.relative_change_percent,
-                        }
-                    )
+        for k in ks:
+            e3 = table(task_root, "experiment3", k, "baseline_comparison.csv")
+            for row in e3.itertuples(index=False):
+                if row.metric.split("@", 1)[0] in RATING_METRICS:
+                    continue
+                baseline_rows.append(
+                    {
+                        "seed": seed,
+                        "k": k,
+                        "model": row.model,
+                        "category": row.category,
+                        "baseline": row.baseline,
+                        "metric": row.metric,
+                        "absolute_difference": row.absolute_difference,
+                        "relative_change_percent": row.relative_change_percent,
+                    }
+                )
 
-                e4 = pd.read_csv(task_root / "experiment4" / f"k_{k}/metric_rankings.csv")
-                for row in e4.itertuples(index=False):
-                    rank_rows.append(
-                        {
-                            "seed": seed,
-                            "k": k,
-                            "metric": row.metric,
-                            "model": row.model,
-                            "category": row.category,
-                            "global_rank": row.global_rank,
-                            "category_leader": bool(row.category_leader),
-                        }
-                    )
-                e4_summary = pd.read_csv(task_root / "experiment4" / f"k_{k}/summary.csv")
-                for row in e4_summary[["model", "pareto_frontier"]].itertuples(index=False, name=None):
-                    pareto_rows.append({"seed": seed, "k": k, "model": row[0], "pareto_frontier": bool(row[1])})
+            e4 = table(task_root, "experiment4", k, "metric_rankings.csv")
+            for row in e4.itertuples(index=False):
+                rank_rows.append(
+                    {
+                        "seed": seed,
+                        "k": k,
+                        "metric": row.metric,
+                        "model": row.model,
+                        "category": row.category,
+                        "global_rank": row.global_rank,
+                        "category_leader": bool(row.category_leader),
+                    }
+                )
+            e4_summary = table(task_root, "experiment4", k, "summary.csv")
+            for row in e4_summary[["model", "pareto_frontier"]].itertuples(index=False, name=None):
+                pareto_rows.append({"seed": seed, "k": k, "model": row[0], "pareto_frontier": bool(row[1])})
 
-                e5 = pd.read_csv(task_root / "experiment5" / f"k_{k}/correlations.csv")
-                for row in e5.itertuples(index=False):
-                    correlation_rows.append(
-                        {
-                            "seed": seed,
-                            "k": k,
-                            "scope": row.scope,
-                            "beyond_accuracy_metric": row.beyond_accuracy_metric,
-                            "pearson": row.pearson,
-                            "spearman": row.spearman,
-                        }
-                    )
-                e5_frontier = pd.read_csv(task_root / "experiment5" / f"k_{k}/pairwise_frontiers.csv")
-                for row in e5_frontier.itertuples(index=False):
-                    frontier_rows.append(
-                        {"seed": seed, "k": k, "scope": row.scope, "beyond_accuracy_metric": row.beyond_accuracy_metric, "model": row.model}
-                    )
+            e5 = table(task_root, "experiment5", k, "correlations.csv")
+            for row in e5.itertuples(index=False):
+                correlation_rows.append(
+                    {
+                        "seed": seed,
+                        "k": k,
+                        "scope": row.scope,
+                        "beyond_accuracy_metric": row.beyond_accuracy_metric,
+                        "pearson": row.pearson,
+                        "spearman": row.spearman,
+                    }
+                )
+            e5_frontier = table(task_root, "experiment5", k, "pairwise_frontiers.csv")
+            for row in e5_frontier.itertuples(index=False):
+                frontier_rows.append(
+                    {"seed": seed, "k": k, "scope": row.scope, "beyond_accuracy_metric": row.beyond_accuracy_metric, "model": row.model}
+                )
     return tuple(pd.DataFrame(rows) for rows in (metric_rows, baseline_rows, rank_rows, pareto_rows, correlation_rows, frontier_rows))
 
 
@@ -195,13 +203,46 @@ def _ci_summary(frame, groups, values):
     return pd.DataFrame(rows)
 
 
+def paired_model_differences(metrics):
+    """Compute contrasts within seed before deriving any across-seed interval."""
+    rows = []
+    for (experiment, k, metric), part in metrics.groupby(["experiment", "k", "metric"], sort=False):
+        wide = part.pivot(index="seed", columns="model", values="value")
+        models = list(wide.columns)
+        for index, model in enumerate(models):
+            for reference in models[index + 1 :]:
+                for seed, delta in (wide[model] - wide[reference]).items():
+                    rows.append(
+                        {
+                            "seed": seed,
+                            "experiment": experiment,
+                            "k": k,
+                            "metric": metric,
+                            "model": model,
+                            "reference": reference,
+                            "difference": delta,
+                        }
+                    )
+    return pd.DataFrame(rows)
+
+
 def aggregate(root, seeds, ks):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     output = root / "aggregate"
     output.mkdir(parents=True, exist_ok=True)
     metrics, baselines, ranks, pareto, correlations, frontiers = _read_per_seed(root, seeds, ks)
     metrics.to_csv(output / "per_seed_metrics.csv", index=False)
     metric_summary = _ci_summary(metrics, ["experiment", "k", "model", "category", "metric"], ["value"])
     metric_summary.to_csv(output / "metric_summary.csv", index=False)
+    paired = paired_model_differences(metrics)
+    paired.to_csv(output / "per_seed_paired_model_differences.csv", index=False)
+    _ci_summary(paired, ["experiment", "k", "metric", "model", "reference"], ["difference"]).to_csv(
+        output / "paired_model_difference_summary.csv", index=False
+    )
     baselines.to_csv(output / "per_seed_baseline_differences.csv", index=False)
     _ci_summary(baselines, ["k", "model", "category", "baseline", "metric"], ["absolute_difference", "relative_change_percent"]).to_csv(
         output / "baseline_difference_summary.csv", index=False
@@ -296,7 +337,7 @@ def aggregate(root, seeds, ks):
                 "individual_models": "All nine Task 1 tuned individuals plus Random and Pop, retrained with fixed tuned configurations; each seed controls split generation and model initialization, matching scripts/seeds.py.",
                 "hybrids": "Seven tuned Task 1 designs rebuilt from each seed's individual scores; selected hyperparameters remain fixed and learned hybrid weights/models are refit using that seed's validation data.",
                 "experiments": {
-                    "1": "Individual model comparison, ranking and beyond-accuracy metrics for each K; MAE/MSE once per seed.",
+                    "1": "Individual model comparison, ranking and beyond-accuracy metrics for each K.",
                     "2": "All 18 individual, baseline, and hybrid models, same metric/K protocol.",
                     "3": "Per-seed baseline differences derived from Experiment 2.",
                     "4": "Per-seed beyond-accuracy ranks, category leaders, and four-dimensional Pareto frontier at each K.",
@@ -327,8 +368,8 @@ def main():
     args = parser.parse_args()
     if not args.seeds or len(set(args.seeds)) != len(args.seeds):
         parser.error("seeds must be non-empty and unique")
-    if not args.ks or any(k < 1 or k > 20 for k in args.ks):
-        parser.error("K values must be between 1 and 20")
+    if not args.ks or len(set(args.ks)) != len(args.ks) or any(k < 1 or k > 20 for k in args.ks):
+        parser.error("K values must be unique and between 1 and 20")
     root = (REPO / args.output).resolve() if not args.output.is_absolute() else args.output.resolve()
     reference = (
         (REPO / args.reference_hybrid_metrics).resolve()
@@ -343,9 +384,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
     main()

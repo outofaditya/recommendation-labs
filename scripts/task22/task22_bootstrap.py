@@ -18,7 +18,6 @@ import pandas as pd
 from scripts.task22.compare_hybrids import HYBRIDS
 from scripts.task22.compare_individuals import MODELS, load_item_features, load_masks, load_predictions
 from source.metrics.beyond_accuracy import BeyondAccuracyMetrics, jaccard_distance
-from source.metrics.evaluation_metrics import EvaluationMetrics
 
 KS = (1, 3, 5, 10, 20)
 RANKING = ("ndcg", "recall", "precision", "mrr", "hit", "map", "f1")
@@ -39,8 +38,8 @@ def _user_metrics(scores, hidden, relevant, distance, k):
     precision_path = hits.cumsum(axis=1) / np.arange(1, k + 1)
     average_precision = (precision_path * hits).sum(axis=1) / np.minimum(counts, k)
 
-    # Per-user components allow user resampling; coverage is recomputed from
-    # the sampled recommendation lists for every bootstrap draw.
+    # Additive per-user components support shared paired bootstrap draws.
+    # Catalogue coverage is a fixed-export point estimate, not user-bootstrapped.
     item_counts = hidden.sum(axis=0)
     total = item_counts.sum()
     probabilities = item_counts / total if total else np.zeros(scores.shape[1])
@@ -68,24 +67,6 @@ def _user_metrics(scores, hidden, relevant, distance, k):
         "serendipity": serendipity,
     }
     return top, values, user_rows
-
-
-def _rating_errors(users, items, scores, test_pairs, ratings):
-    u_index = {str(value): i for i, value in enumerate(users)}
-    i_index = {str(value): i for i, value in enumerate(items)}
-    abs_error = np.zeros(len(users), dtype=float)
-    sq_error = np.zeros(len(users), dtype=float)
-    pair_count = np.zeros(len(users), dtype=int)
-    for row in test_pairs.itertuples(index=False):
-        user, item = str(row[0]), str(row[1])
-        if user in u_index and item in i_index and (user, item) in ratings:
-            prediction = scores[u_index[user], i_index[item]]
-            if np.isfinite(prediction):
-                delta = prediction - ratings[(user, item)]
-                abs_error[u_index[user]] += abs(delta)
-                sq_error[u_index[user]] += delta * delta
-                pair_count[u_index[user]] += 1
-    return abs_error, sq_error, pair_count
 
 
 def _make_plots(summary, output, ks):
@@ -119,7 +100,6 @@ def run(
     seed=22022,
     ks=KS,
     items_path=Path("data/ml-100k/ml-100k.item"),
-    interactions_path=Path("data/ml-100k/ml-100k.inter"),
 ):
     if reps < 100:
         raise ValueError("Use at least 100 bootstrap replicates")
@@ -134,8 +114,8 @@ def run(
     eligible = np.flatnonzero(relevant.any(axis=1))
     features = load_item_features(items_path, items)
     distance = BeyondAccuracyMetrics.build_genre_distance_matrix(features, len(items), jaccard_distance)
-    test_pairs = pd.read_csv(results / "split/test.tsv", sep="\t", dtype=str)
-    ratings = EvaluationMetrics.load_interaction_ratings(interactions_path)
+    if not len(eligible):
+        raise ValueError("No users with test interactions")
 
     prepared = {}
     for name in models:
@@ -151,45 +131,28 @@ def run(
         for k in ks:
             top, values, user_rows = _user_metrics(scores, hidden, relevant, distance, k)
             by_k[k] = (top, values, user_rows)
-        ae, se, n = _rating_errors(users, items, scores, test_pairs, ratings)
-        prepared[name] = (by_k, ae, se, n)
+        prepared[name] = by_k
         print(f"Prepared {name}", flush=True)
 
-    rng = np.random.default_rng(seed)
-    draws = {(name, k, metric): np.empty(reps, dtype=float) for name in models for k in ks for metric in (list(RANKING) + list(BEYOND))}
-    draws.update({(name, 0, metric): np.empty(reps, dtype=float) for name in models for metric in ("mae", "mse")})
+    metrics = RANKING + ("novelty", "ild", "serendipity")
+    draws = {(name, k, metric): np.empty(reps, dtype=float) for name in models for k in ks for metric in metrics}
     point_rows = []
+    for name, by_k in prepared.items():
+        for k, (ranked, values, user_rows) in by_k.items():
+            if not np.array_equal(user_rows, eligible):
+                raise ValueError(f"Eligible user order differs for {name}")
+            point_rows.extend({"model": name, "k": k, "metric": metric, "value": float(values[metric].mean())} for metric in metrics)
+            point_rows.append({"model": name, "k": k, "metric": "coverage", "value": float(np.unique(ranked).size / len(items))})
 
-    for name, (by_k, ae, se, pair_n) in prepared.items():
-        for k, (top, values, user_rows) in by_k.items():
-            for metric in RANKING:
-                point_rows.append({"model": name, "k": k, "metric": metric, "value": float(values[metric].mean())})
-            point_rows.append({"model": name, "k": k, "metric": "coverage", "value": float(np.unique(top[user_rows]).size / len(items))})
-            for metric in ("novelty", "ild", "serendipity"):
-                point_rows.append({"model": name, "k": k, "metric": metric, "value": float(values[metric].mean())})
-            positions = {u: pos for pos, u in enumerate(user_rows)}
-            for draw in range(reps):
-                sampled = rng.choice(user_rows, size=len(user_rows), replace=True)
-                local = np.fromiter((positions[u] for u in sampled), dtype=int, count=len(sampled))
-                for metric in RANKING + ("novelty", "ild", "serendipity"):
+    # Reuse each draw across all models and cutoffs, so subtraction gives a
+    # paired interval. Do not use overlapping marginal CIs to compare models.
+    rng = np.random.default_rng(seed)
+    for draw in range(reps):
+        local = rng.integers(0, len(eligible), size=len(eligible))
+        for name, by_k in prepared.items():
+            for k, (_, values, _) in by_k.items():
+                for metric in metrics:
                     draws[name, k, metric][draw] = float(values[metric][local].mean())
-                draws[name, k, "coverage"][draw] = np.unique(top[local]).size / len(items)
-        point_rows.extend(
-            [
-                {"model": name, "k": "all", "metric": "mae", "value": float(ae.sum() / pair_n.sum())},
-                {"model": name, "k": "all", "metric": "mse", "value": float(se.sum() / pair_n.sum())},
-            ]
-        )
-        # ``pair_n`` is the per-user count of finite test-pair predictions.
-        # Bootstrap only users contributing at least one rating error; the
-        # previous code referenced an undefined ``valid`` variable here.
-        users_with_ratings = np.flatnonzero(pair_n > 0)
-        for draw in range(reps):
-            sampled = rng.choice(users_with_ratings, size=len(users_with_ratings), replace=True)
-            denomin = pair_n[sampled].sum()
-            draws[name, 0, "mae"][draw] = ae[sampled].sum() / denomin
-            draws[name, 0, "mse"][draw] = se[sampled].sum() / denomin
-        print(f"Bootstrapped {name}", flush=True)
 
     point = pd.DataFrame(point_rows)
     ci_rows = []
@@ -197,7 +160,7 @@ def run(
         ci_rows.append(
             {
                 "model": name,
-                "k": "all" if k == 0 else k,
+                "k": k,
                 "metric": metric,
                 "ci95_low": float(np.quantile(samples, 0.025)),
                 "ci95_high": float(np.quantile(samples, 0.975)),
@@ -205,12 +168,32 @@ def run(
             }
         )
     intervals = pd.DataFrame(ci_rows)
-    summary = point.merge(intervals, on=["model", "k", "metric"], validate="one_to_one")
+    summary = point.merge(intervals, on=["model", "k", "metric"], validate="one_to_one", how="left")
     output.mkdir(parents=True, exist_ok=True)
     point.to_csv(output / "point_estimates.csv", index=False)
     intervals.to_csv(output / "confidence_intervals.csv", index=False)
     summary.to_csv(output / "summary.csv", index=False)
 
+    paired_rows = []
+    points = point.set_index(["model", "k", "metric"])["value"]
+    for left_index, left in enumerate(models):
+        for right in models[left_index + 1 :]:
+            for k in ks:
+                for metric in metrics:
+                    delta = draws[left, k, metric] - draws[right, k, metric]
+                    paired_rows.append(
+                        {
+                            "model": left,
+                            "reference": right,
+                            "k": k,
+                            "metric": metric,
+                            "difference": float(points[left, k, metric] - points[right, k, metric]),
+                            "ci95_low": float(np.quantile(delta, 0.025)),
+                            "ci95_high": float(np.quantile(delta, 0.975)),
+                            "bootstrap_reps": reps,
+                        }
+                    )
+    pd.DataFrame(paired_rows).to_csv(output / "paired_differences.csv", index=False)
     _make_plots(summary, output, ks)
 
     protocol = {
@@ -223,11 +206,13 @@ def run(
         "models": models,
         "users_bootstrapped": len(eligible),
         "ranking_relevance": "Binary test interaction; train and validation items hidden.",
-        "rating_metrics": "MAE/MSE are computed once (K-independent), by pooled finite test-pair predictions; bootstrap resamples users and their test pairs.",
+        "paired_comparisons": "All model pairs share user samples across models and K; paired_differences.csv reports left minus right intervals.",
+        "coverage_uncertainty": "Coverage is point-only for fixed exports: ordinary user bootstrap shrinks the unique-item union. Use independent-seed intervals for coverage uncertainty.",
+        "rating_metrics": "Excluded: implicit-feedback scores are not on a rating scale.",
         "beyond_accuracy": "Coverage, hidden-interaction self-information novelty, genre-Jaccard ILD, relevance-weighted genre-distance serendipity.",
         "limitations": [
             "Does not include variation from retraining on different seeds or split generation.",
-            "Bootstrap intervals are descriptive; paired model comparisons should use shared bootstrap user samples for formal difference intervals.",
+            "Paired intervals are pointwise, without multiple-comparison correction.",
         ],
     }
     (output / "protocol.json").write_text(json.dumps(protocol, indent=2) + "\n")
@@ -235,8 +220,8 @@ def run(
         "# Task 2.2 K sweep and user-bootstrap uncertainty\n\n"
         f"Evaluated {len(models)} saved model exports at K={', '.join(map(str, ks))}, with {reps:,} user-bootstrap replicates. "
         "The intervals quantify uncertainty from the sampled test users for this fixed split and fixed exports; they do not quantify variation from retraining. "
-        "MAE and MSE are K-independent and summarized once per model.\n\n"
-        "See `summary.csv` for estimates and 95% percentile intervals, `plots/` for metric-versus-K figures, and `protocol.json` for details.\n"
+        "Coverage is a point estimate only; its user-bootstrap union would be biased downward. Rating errors are excluded.\n\n"
+        "See `paired_differences.csv` for paired model contrasts, `summary.csv` for estimates and 95% percentile intervals, `plots/` for metric-versus-K figures, and `protocol.json` for details.\n"
     )
     return summary, protocol
 
@@ -249,7 +234,6 @@ def main():
     parser.add_argument("--seed", type=int, default=22022)
     parser.add_argument("--ks", nargs="+", type=int, default=list(KS))
     parser.add_argument("--items", type=Path, default=Path("data/ml-100k/ml-100k.item"))
-    parser.add_argument("--interactions", type=Path, default=Path("data/ml-100k/ml-100k.inter"))
     parser.add_argument("--plots-only", action="store_true", help="Regenerate figures from an existing summary.csv")
     args = parser.parse_args()
     if args.plots_only:
@@ -257,7 +241,7 @@ def main():
         _make_plots(summary, args.output, args.ks)
         print(f"Regenerated plots in {args.output / 'plots'}", flush=True)
         return
-    summary, _ = run(args.results, args.output, args.reps, args.seed, args.ks, args.items, args.interactions)
+    summary, _ = run(args.results, args.output, args.reps, args.seed, args.ks, args.items)
     print(f"Saved {len(summary)} estimates to {args.output}", flush=True)
 
 

@@ -24,7 +24,6 @@ def run_pipeline(
     output_root=Path("results/task2"),
     ks=DEFAULT_KS,
     items=Path("data/ml-100k/ml-100k.item"),
-    interactions=Path("data/ml-100k/ml-100k.inter"),
 ):
     """Run Experiments 1--5 for every requested K and return output paths."""
     results = Path(results)
@@ -41,11 +40,12 @@ def run_pipeline(
         e4 = output_root / "experiment4" if len(ks) == 1 else output_root / "experiment4" / f"k_{k}"
         e5 = output_root / "experiment5" if len(ks) == 1 else output_root / "experiment5" / f"k_{k}"
 
-        run_individuals(results, e1, k, items, interactions)
-        run_hybrids(results, e2, k, items, interactions)
+        run_individuals(results, e1, k, items)
+        run_hybrids(results, e2, k, items)
         run_baselines(e2 / "summary.csv", e2 / "protocol.json", e3)
         run_beyond_accuracy(e2 / "summary.csv", e2 / "protocol.json", e4, k)
         run_tradeoffs(e2 / "summary.csv", e2 / "protocol.json", e5, k)
+        print(f"Task 2.2 K={k}: Experiments 1–5 complete", flush=True)
         outputs.append({"k": k, "experiment1": e1, "experiment2": e2, "experiment3": e3, "experiment4": e4, "experiment5": e5})
     return outputs
 
@@ -56,9 +56,8 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("results/task2"))
     parser.add_argument("--ks", nargs="+", type=int, default=list(DEFAULT_KS))
     parser.add_argument("--items", type=Path, default=Path("data/ml-100k/ml-100k.item"))
-    parser.add_argument("--interactions", type=Path, default=Path("data/ml-100k/ml-100k.inter"))
     args = parser.parse_args()
-    outputs = run_pipeline(args.results, args.output, args.ks, args.items, args.interactions)
+    outputs = run_pipeline(args.results, args.output, args.ks, args.items)
     print(f"Completed Task 2.2 Experiments 1--5 for K={[entry['k'] for entry in outputs]}")
 
 
