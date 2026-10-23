@@ -14,7 +14,7 @@ Working notes behind the report. Every choice has its reason and every number is
 
 ## Task 1 — Hybrid Recommender
 
-Eleven models from five families: Random and Pop as baselines · ItemKNN and UserKNN as neighbourhood models · BPR · NeuMF and FISM as latent factor models · LightGCN and NGCF as graph models · EASE and SLIMElastic as linear item-item models. Content-based models are excluded by the brief.
+Twelve models from six families: Random and Pop as baselines · ItemKNN and UserKNN as neighbourhood models · BPR · NeuMF and FISM as latent factor models · LightGCN and NGCF as graph models · EASE and SLIMElastic as linear item-item models · ContentBased on movie genres and release decade. ContentBased is evaluated on its own and stays out of the hybrids.
 
 | Hypothesis | Source |
 | --- | --- |
@@ -27,7 +27,7 @@ Eleven models from five families: Random and Pop as baselines · ItemKNN and Use
 
 ### 1.1 Individual Models
 
-Each model trains once with its course configuration at seed 2020.
+Each model trains once with its course configuration at seed 2020. ContentBased has no course configuration so its baseline is the textbook one: cosine between a movie's genres and the profile of the user's train movies (`parameters/ContentBased.yaml`).
 
 | Model | NDCG@10 | Recall@10 | MRR@10 | Hit@10 |
 | --- | --- | --- | --- | --- |
@@ -42,8 +42,10 @@ Each model trains once with its course configuration at seed 2020.
 | NGCF | 0.1842 | 0.1545 | 0.3137 | 0.6394 |
 | EASE | 0.3295 | 0.2805 | 0.5277 | 0.8197 |
 | SLIMElastic | 0.3235 | 0.2750 | 0.5231 | 0.8123 |
+| ContentBased | 0.0193 | 0.0153 | 0.0467 | 0.1241 |
 
 **Observations.**
+- **Content alone is weak.** ContentBased triples Random but reaches a fifth of Pop. Genres say what kind of movie a user likes but not which of the many movies of that kind they watched.
 - **Linear item models lead.** EASE and SLIMElastic learn one weight per movie pair. With 1,682 movies and about 60 ratings each a full item-item model is cheap and well supported.
 - **Neighbourhood models follow.** ItemKNN and UserKNN use the same co-occurrence signal with fixed cosine weights instead of learned ones.
 - **Pop reaches 16 times Random.** Concentrated popularity lets one ranking for everyone find many test movies.
@@ -54,7 +56,7 @@ Each model trains once with its course configuration at seed 2020.
 **Method.**
 - **Selection.** Validation NDCG@10 since it credits every hit by rank while MRR credits only the first.
 - **Budget.** Up to 500 epochs with validation every 5 and a stop after 6 checks without gain. Every trial records its epochs to show no winner hit the cap.
-- **Search.** Full grids for models with one or two settings. Seeded TPE with 40 to 70 trials for four to eight settings since random search beats grids at equal budget (Bergstra and Bengio 2012) and TPE learns from earlier trials.
+- **Search.** Full grids for models with one or two settings and for ContentBased whose 108 points score in seconds. Seeded TPE with 40 to 70 trials for four to eight settings since random search beats grids at equal budget (Bergstra and Bengio 2012) and TPE learns from earlier trials.
 - **Spaces.** Set wide in one pass from each paper and RecBole's defaults (Appendix B). A winner on an edge is a limitation.
 - **Parallelism.** A free worker starts the next trial at once. Grids are identical at any worker count and one worker reproduces RecBole's sequential TPE. FISM was tuned with 5 workers on an RTX 4090 since its scoring takes hours per trial on CPU. All final runs used that GPU.
 - **Robustness.** Each winner is retrained with seeds 2020 to 2024 which redraw split and initialisation. A gap smaller than the spread is a tie.
@@ -65,6 +67,7 @@ Each model trains once with its course configuration at seed 2020.
 | ItemKNN | Grid | 50 | 0.2234 | — | — |
 | UserKNN | Grid | 45 | 0.2355 | — | — |
 | SLIMElastic | Grid | 56 | 0.2589 | — | — |
+| ContentBased | Grid | 108 | 0.0554 | — | — |
 | BPR | TPE | 60 | 0.2535 | 220 | 8 |
 | NeuMF | TPE | 70 | 0.2501 | 170 | 2 |
 | LightGCN | TPE | 50 | 0.2504 | 270 | 5 |
@@ -84,8 +87,13 @@ Each model trains once with its course configuration at seed 2020.
 | NGCF | 0.1842 | 0.3201 | 0.2745 | 0.3112 ± 0.0058 |
 | EASE | 0.3295 | 0.3309 | 0.2808 | 0.3266 ± 0.0055 |
 | SLIMElastic | 0.3235 | 0.3240 | 0.2769 | 0.3288 ± 0.0066 |
+| ContentBased | 0.0193 | 0.0457 | 0.0343 | — |
+
+ContentBased wins with the neighbourhood method over the `k` 400 most similar movies · decade weight 1.0 and idf weighting (`parameters/tuned/ContentBased.yaml`).
 
 **Observations.**
+- **Neighbours beat one profile for content.** The best profile setting reaches 0.0369 on validation against 0.0554 for neighbours. With every neighbour kept the two methods rank identically up to float ties so the gain comes from `k` alone. A user's taste is several clusters of genres which one averaged profile blurs.
+- **Release decade and rare genres help.** The best setting without the decade reaches 0.0470 on validation. The decade and idf weighting lift ContentBased to 2.4 times its baseline on test yet it stays below Pop.
 - **Budget was the bottleneck.** Trained winners stop between 125 and 270 epochs against the course limit of 20. LightGCN and FISM double their NDCG@10.
 - **Grid models were near their best.** EASE peaks at `reg_weight` 300 beside the course value of 250 and the five best ItemKNN settings lie within 0.001. ItemKNN's 0.005 test drop is selection noise on that plateau.
 - **Full rank item models still lead.** FISM learns item similarity through low rank factors and takes the largest embedding on offer so this catalogue needs the high rank a full weight matrix gives for free.
@@ -109,12 +117,14 @@ Each model trains once with its course configuration at seed 2020.
 - Eight models were tuned on CPU and FISM on GPU which can shift close winners but not the reported test numbers.
 - SLIMElastic ties at `l1_ratio` 0.001 and 0.0001 and the earlier trial wins.
 - NGCF differs in the fourth decimal between identical runs while every other model repeats exactly.
+- ContentBased's 1,682 movies share only 216 genre combinations so many scores tie and float rounding breaks them. Its fourth decimal shifts between machines and the best two settings lie within 0.0003.
+- ContentBased's first grid had its winner on the largest decade weight and `k` so both were widened once. It runs outside RecBole so it has no 5 seed spread.
 
 ### 1.3 Weighted Hybrid
 
 **Method.**
 - **Score.** A weighted sum of the members' scores for a user and movie with weights learned by regression on validation.
-- **Members.** The nine tuned models and Pop. Random carries no signal.
+- **Members.** The nine tuned models and Pop. Random carries no signal and ContentBased was added after the hybrids were run.
 - **Scaling.** Each member is standardised per user over the movies outside train since raw scales differ and only the order within a user matters.
 - **Candidates.** The union of every member's top 100 movies per user as in the ranking stage of industrial recommenders. The fit then learns the order near the top which is all NDCG@10 sees. They cover 79% of validation movies in about 215,000 rows.
 - **Regression.** Logistic regression with L2 on a 0 or 1 label for validation movies. Each weight reads as a member's effect on the odds of a hit and L2 keeps near-duplicate members stable.
@@ -309,6 +319,7 @@ Pseudo-interactions gain 0.017 with 25 peers and nothing with 200 so densifying 
 | NGCF | Graph propagation with learned weights · non-linearity and dropout with layers concatenated |
 | EASE | Closed-form item-item matrix minimising $\lVert R - RB \rVert^2 + \lambda \lVert B \rVert^2$ with a zero diagonal |
 | SLIMElastic | The same objective as one non-negative elastic net per movie giving a sparse matrix |
+| ContentBased | Unit-length genre and weighted decade vector per movie. Cosine to the sum of the user's train movies or summed cosine to them over the `k` most similar movies |
 
 ## Appendix B — Search Spaces
 
@@ -350,5 +361,9 @@ Log marks a log scale range. Other ranges are choices or uniform intervals.
 | FISM | `alpha` | 0 to 1 |
 | FISM | `reg_weights` | 1e-6 · 1e-5 · 1e-4 · 1e-3 · 1e-2 |
 | FISM | `learning_rate` | 1e-4 to 1e-2 log |
+| ContentBased | `method` | profile · knn |
+| ContentBased | `decade` | 0 · 0.25 · 0.5 · 1 · 2 · 4 |
+| ContentBased | `idf` | off · on |
+| ContentBased | `k` | all · 10 · 25 · 50 · 100 · 200 · 400 · 800 (knn only) |
 
 Fixed: LightGCN uses one negative as in its paper and SLIMElastic keeps non-negative weights.
