@@ -21,7 +21,7 @@ seeds-task2/
 split.tar
 tuned_predictions.tar.gz
 scripts/slurm
-tests
+parameters/delftblue_gpu.yaml
 
 # LaTeX build artifacts
 report/*.aux
