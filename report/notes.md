@@ -92,8 +92,8 @@ Each model trains once with its course configuration at seed 2020. ContentBased 
 ContentBased wins with the neighbourhood method over the `k` 400 most similar movies · decade weight 1.0 and idf weighting (`parameters/tuned/ContentBased.yaml`).
 
 **Observations.**
-- **Neighbours beat one profile for content.** The best profile setting reaches 0.0369 on validation against 0.0554 for neighbours. With every neighbour kept the two methods score identically at every setting so the gain comes from `k` alone. A user's taste is several clusters of genres which one averaged profile blurs.
-- **Release decade and rare genres help.** The best genre-only setting reaches 0.0470 on validation. Adding the decade and idf weighting lifts ContentBased to 2.4 times its baseline on test, yet it stays below Pop.
+- **Neighbours beat one profile for content.** The best profile setting reaches 0.0369 on validation against 0.0554 for neighbours. With every neighbour kept the two methods rank identically up to float ties so the gain comes from `k` alone. A user's taste is several clusters of genres which one averaged profile blurs.
+- **Release decade and rare genres help.** The best setting without the decade reaches 0.0470 on validation. The decade and idf weighting lift ContentBased to 2.4 times its baseline on test yet it stays below Pop.
 - **Budget was the bottleneck.** Trained winners stop between 125 and 270 epochs against the course limit of 20. LightGCN and FISM double their NDCG@10.
 - **Grid models were near their best.** EASE peaks at `reg_weight` 300 beside the course value of 250 and the five best ItemKNN settings lie within 0.001. ItemKNN's 0.005 test drop is selection noise on that plateau.
 - **Full rank item models still lead.** FISM learns item similarity through low rank factors and takes the largest embedding on offer so this catalogue needs the high rank a full weight matrix gives for free.
@@ -117,7 +117,7 @@ ContentBased wins with the neighbourhood method over the `k` 400 most similar mo
 - Eight models were tuned on CPU and FISM on GPU which can shift close winners but not the reported test numbers.
 - SLIMElastic ties at `l1_ratio` 0.001 and 0.0001 and the earlier trial wins.
 - NGCF differs in the fourth decimal between identical runs while every other model repeats exactly.
-- ContentBased's 1,682 movies share only 216 genre combinations so many scores tie and movie order breaks them. This makes its grid noisy and the best two settings differ by 0.0001.
+- ContentBased's 1,682 movies share only 216 genre combinations so many scores tie and float rounding breaks them. Its fourth decimal shifts between machines and the best two settings lie within 0.0003.
 - ContentBased's first grid had its winner on the largest decade weight and `k` so both were widened once. It runs outside RecBole so it has no 5 seed spread.
 
 ### 1.3 Weighted Hybrid
