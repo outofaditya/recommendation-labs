@@ -69,8 +69,20 @@ def cascade(x, masks):
 
 
 # member scores beside side data for each candidate pair
-def pairs(x, train):
-    person, movie = side()
+def pair_feature_blocks(score_count, side_features):
+    """Column indices in pairs(): scores, users (including activity), movies."""
+    person, movie = side_features
+    user_end = score_count + person.shape[1] + 1
+    movie_end = user_end + movie.shape[1] + 1
+    return {
+        "scores": np.arange(score_count),
+        "user": np.arange(score_count, user_end),
+        "movie": np.arange(user_end, movie_end),
+    }
+
+
+def pairs(x, train, side_features=None):
+    person, movie = side() if side_features is None else side_features
     movies = np.column_stack([movie, train.sum(axis=0)])
     people = np.column_stack([person, train.sum(axis=1)])
 

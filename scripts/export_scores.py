@@ -60,11 +60,12 @@ def full_scores(model, dataset, device):
     return users, torch.cat(rows)[:, 1:].float().numpy()
 
 
-def load(name, folder="parameters", overrides=None):
+def load(name, folder="parameters", overrides=None, config_path=None):
     path = Path(folder) / f"{name}.yaml"
     path = path if path.exists() else Path("parameters") / path.name
     checkpoints = {"checkpoint_dir": str(RESULTS / "checkpoints")}
-    return Config(config_file_list=[str(path)], config_dict=checkpoints | (overrides or {}))
+    files = [str(path)] + ([str(config_path)] if config_path is not None else [])
+    return Config(config_file_list=files, config_dict=checkpoints | (overrides or {}))
 
 
 def fit(config, saved=True):
@@ -78,13 +79,30 @@ def fit(config, saved=True):
     return dataset, loaders, model, trainer, valid, len(trainer.train_loss_dict)
 
 
-def export(name, tuned=False):
-    config = load(name, "parameters/tuned" if tuned else "parameters")
+def export(name, tuned=False, seed=None, config_path=None, require_gpu=False):
+    overrides = {"seed": seed} if seed is not None else None
+    config = load(name, "parameters/tuned" if tuned else "parameters", overrides, config_path)
+    if require_gpu and (not torch.cuda.is_available() or torch.device(config["device"]).type != "cuda"):
+        raise RuntimeError("--require-gpu needs CUDA and a configuration that enables GPU use")
     dataset, loaders, model, trainer, best_valid, epochs = fit(config)
     save_split(dataset, loaders)
     test_result = trainer.evaluate(loaders[2], load_best_model=True)
 
     users, scores = full_scores(model, dataset, config["device"])
+    # Meta-Level needs the propagated embeddings of the exact restored model
+    # that produced these scores, including RecBole's padding row.
+    if name in ("LightGCN", "NGCF"):
+        user_embeddings = model.restore_user_e.detach().cpu().numpy()
+        item_embeddings = model.restore_item_e.detach().cpu().numpy()
+        if not np.allclose(user_embeddings[1:] @ item_embeddings[1:].T, scores, atol=1e-4):
+            raise ValueError(f"{name} embeddings do not reconstruct the exported scores")
+        folder = RESULTS / "checkpoints"
+        folder.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            folder / f"export-{name}-{config['seed']}-embeddings.npz",
+            user_embeddings=user_embeddings,
+            item_embeddings=item_embeddings,
+        )
     items = np.arange(1, dataset.item_num)
     out = RESULTS / ("tuned" if tuned else "")
     folder = out / "scores"
@@ -106,4 +124,9 @@ def export(name, tuned=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model")
-    export(parser.parse_args().model)
+    parser.add_argument("--tuned", action="store_true")
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--config", type=Path, help="Optional portable RecBole configuration overrides")
+    parser.add_argument("--require-gpu", action="store_true", help="Fail before training when CUDA is unavailable or disabled")
+    args = parser.parse_args()
+    export(args.model, tuned=args.tuned, seed=args.seed, config_path=args.config, require_gpu=args.require_gpu)

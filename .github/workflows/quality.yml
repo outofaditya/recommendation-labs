@@ -17,6 +17,8 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff format --check
       - run: uv run ruff check
+      - name: code-only regression tests
+        run: uv run python -m unittest discover -s scripts/task22/tests -t .
 
   smoke:
     runs-on: ubuntu-latest

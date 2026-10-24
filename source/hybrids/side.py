@@ -17,6 +17,11 @@ def atoms(kind, tokens):
 @cache
 def side():
     _, users, items = scores("Pop")
+    return load_side(users, items)
+
+
+def load_side(users, items):
+    """Load side features in an explicitly supplied export order."""
     movies, people = atoms("item", items), atoms("user", users)
     genres = movies["class:token_seq"].str.get_dummies(sep=" ")
     year = pd.to_numeric(movies["release_year:token"], errors="coerce")

@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from scripts.compare_individuals import METRICS, MODELS, load_item_features, load_masks, load_predictions
+from scripts.task22.compare_individuals import METRICS, MODELS, load_item_features, load_masks, load_predictions
 from source.metrics.beyond_accuracy import BeyondAccuracyMetrics, jaccard_distance
 from source.metrics.ranking_metrics import RankingMetrics
 
@@ -22,10 +22,16 @@ def markdown_table(frame):
     return "\n".join(lines)
 
 
-def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
+def run(
+    results,
+    output,
+    k=10,
+    items_path=Path("data/ml-100k/ml-100k.item"),
+):
     if k < 1:
         raise ValueError("k must be positive")
-    columns = [f"{metric}@{k}" for metric in METRICS]
+    ranking_columns = [f"{metric}@{k}" for metric in METRICS]
+    columns = ranking_columns
     rows, diagnostics, hashes, warnings = [], {}, {}, []
     reference = None
     for name in MODELS + HYBRIDS:
@@ -50,8 +56,11 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         values = RankingMetrics.calculate_all_metrics(scores, hidden, masks["test"], k)
         values.update(BeyondAccuracyMetrics.calculate_all_metrics(scores, hidden, masks["test"], distance_matrix, k))
         group = "hybrid" if hybrid else ("baseline" if name in ("Random", "Pop") else "individual")
-        rows.append({"model": name, "category": group, **{c: values[c] for c in columns}})
-        diagnostics[name] = {"minimum_candidates": int(counts.min()), "maximum_candidates": int(counts.max())}
+        rows.append({"model": name, "category": group, **{c: values[c] for c in ranking_columns}})
+        diagnostics[name] = {
+            "minimum_candidates": int(counts.min()),
+            "maximum_candidates": int(counts.max()),
+        }
         if name == "Random":
             distinct = len(np.unique(scores, axis=0))
             diagnostics[name]["distinct_score_rows"] = distinct
@@ -64,10 +73,10 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         path = results / "split" / f"{name}.tsv"
         hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     hashes[str(items_path)] = hashlib.sha256(items_path.read_bytes()).hexdigest()
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     for relative in (
-        "scripts/compare_hybrids.py",
-        "scripts/compare_individuals.py",
+        "scripts/task22/compare_hybrids.py",
+        "scripts/task22/compare_individuals.py",
         "source/metrics/ranking_metrics.py",
         "source/metrics/beyond_accuracy.py",
     ):
@@ -101,11 +110,16 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         "users_evaluated": int(eligible.sum()),
         "catalog_size": len(items),
         "split_interactions": {name: int(mask.sum()) for name, mask in masks.items()},
-        "relevance": "Binary test interaction irrespective of rating; hide train and validation",
+        "relevance": "Binary test interaction irrespective of rating for ranking metrics; hide train and validation",
+        "score_scale": "Implicit-feedback ranking scores are uncalibrated; MAE/MSE/RMSE are excluded.",
         "aggregation": "Macro mean over the same users with test interactions",
         "metrics": {
-            "accuracy": "Task 2.1 RankingMetrics.calculate_all_metrics; AP denominator min(test positives, K); per-user F1",
-            "beyond_accuracy": "Task 2.1 BeyondAccuracyMetrics: catalog coverage; self-information novelty from hidden interaction frequency; genre-Jaccard ILD; relevance-weighted genre-distance serendipity",
+            "ranking_accuracy": ranking_columns,
+            "beyond_accuracy": [f"{metric}@{k}" for metric in ("coverage", "novelty", "ild", "serendipity")],
+            "definitions": {
+                "ranking_accuracy": "Task 2.1 RankingMetrics.calculate_all_metrics; AP denominator min(test positives, K); per-user F1",
+                "beyond_accuracy": "Task 2.1 BeyondAccuracyMetrics: catalog coverage; self-information novelty from hidden interaction frequency; genre-Jaccard ILD; relevance-weighted genre-distance serendipity",
+            },
         },
         "ties": "Stable exported item-column order",
         "candidates": "Preserve each hybrid's exported candidate pool; negative infinity excludes an item; require at least K finite unseen items",
@@ -128,7 +142,7 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
     beating = winners[winners[columns[0]] > best[columns[0]]].model.tolist()
     report = (
         "# Task 2.2 — Experiment 2: tuned hybrids versus individuals\n\n"
-        f"Evaluated all 18 fixed local exports on {int(eligible.sum())} test users at K={k}, using the Task 2.1 accuracy and beyond-accuracy metrics. "
+        f"Evaluated all 18 fixed local exports on {int(eligible.sum())} test users at K={k}. Ranking and beyond-accuracy metrics use the Task 2.1 definitions. "
         "Train and validation interactions are hidden; hybrid candidate restrictions are preserved. No training or tuning was performed.\n\n"
         + markdown_table(summary)
         + "\n\n## Hybrid comparison\n\n"
@@ -140,11 +154,11 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         + "Hybridisation therefore does not improve every design equally. Weighted blends member scores, Mixed fuses ranks, and Combination learns from scores and side features; "
         "their aggregate results should be distinguished from Cascade's restricted shortlist and Switching's choice of one member per user group. "
         "These mechanisms motivate explanations but this comparison alone does not establish their causal effects. "
-        "Accuracy and beyond-accuracy metrics are reported because ranking quality, catalogue reach, novelty, list diversity and serendipity need not move together.\n\n"
+        "Accuracy and beyond-accuracy metrics are reported because ranking quality, catalogue reach, novelty, list diversity and serendipity need not move together. Rating errors are excluded because exported scores are uncalibrated ranking scores.\n\n"
         + "## Limits\n\n"
         + "\n".join(f"- {v}" for v in protocol["limitations"] + warnings)
         + "\n\nDifferences are descriptive, without significance tests. The all-pairs CSV compares every hybrid against every individual, avoiding reliance on a single reference.\n\n"
-        + "Reproduce from the repository root: `uv run python -m scripts.compare_hybrids`\n"
+        + "Reproduce from the repository root: `uv run python -m scripts.task22.compare_hybrids`\n"
     )
     output.mkdir(parents=True, exist_ok=True)
     summary.to_csv(output / "summary.csv", index=False)

@@ -10,6 +10,7 @@ import pandas as pd
 
 BASELINES = ("Random", "Pop")
 IDENTIFIERS = ("model", "category")
+RATING_METRICS = {"mae", "mse", "rmse"}
 
 
 def markdown_table(frame):
@@ -30,7 +31,7 @@ def run(summary_path, protocol_path, output):
     if summary["model"].duplicated().any():
         raise ValueError("Summary contains duplicate model rows")
 
-    metrics = [column for column in summary.columns if column not in IDENTIFIERS]
+    metrics = [column for column in summary.columns if column not in IDENTIFIERS and column.split("@", 1)[0].lower() not in RATING_METRICS]
     if not metrics:
         raise ValueError("Summary contains no metric columns")
     numeric = summary[metrics].apply(pd.to_numeric, errors="coerce")
@@ -68,7 +69,8 @@ def run(summary_path, protocol_path, output):
                 )
     comparisons = pd.DataFrame(rows)
 
-    primary = comparisons[comparisons["metric"] == "ndcg@10"].pivot(
+    k = int(json.loads(protocol_path.read_text())["k"])
+    primary = comparisons[comparisons["metric"] == f"ndcg@{k}"].pivot(
         index=["model", "category"],
         columns="baseline",
         values=["absolute_difference", "relative_change_percent"],
@@ -89,13 +91,17 @@ def run(summary_path, protocol_path, output):
         "comparison_count": len(comparisons),
         "absolute_difference": "model metric - baseline metric",
         "relative_change": "(model metric - baseline metric) / baseline metric",
-        "direction": "All included metrics are higher-is-better; a negative change means the model scores below the baseline on that metric.",
+        "direction": {
+            "higher_is_better": metrics,
+            "absolute_difference": "model metric - baseline metric for every metric",
+            "interpretation": "Positive change is better for ranking and beyond-accuracy metrics.",
+        },
         "interpretation": "Percentage change measures scale relative to a baseline, not statistical significance or causal improvement.",
         "warnings": warnings,
         "sha256": {
             str(summary_path): hashlib.sha256(summary_path.read_bytes()).hexdigest(),
             str(protocol_path): hashlib.sha256(protocol_path.read_bytes()).hexdigest(),
-            "scripts/quantify_baselines.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "scripts/task22/quantify_baselines.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         },
     }
 
@@ -111,10 +117,10 @@ def run(summary_path, protocol_path, output):
     )
     report = (
         "# Task 2.2 — Experiment 3: improvement over naïve baselines\n\n"
-        "Every tuned individual and hybrid is compared with the saved Random and Pop exports across all 11 Task 2.1 metrics. "
+        "Every tuned individual and hybrid is compared with the saved Random and Pop exports across the seven ranking and four beyond-accuracy metrics. "
         "Absolute difference is model minus baseline; relative change divides that difference by the baseline. No model is trained or selected here.\n\n"
         + markdown_table(report_table)
-        + "\n\nThe long-form CSV contains both comparisons for all accuracy and beyond-accuracy metrics. "
+        + "\n\nThe long-form CSV contains comparisons for all ranking and beyond-accuracy metrics. Positive changes are improvements. "
         "Percentage changes against near-zero Random values are mechanically large and must be read with absolute differences. "
         "The saved Random export also contains only four distinct score rows for 943 users.\n"
     )

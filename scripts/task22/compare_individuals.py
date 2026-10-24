@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from source.data import split
 from source.metrics.beyond_accuracy import BeyondAccuracyMetrics, jaccard_distance
 from source.metrics.ranking_metrics import RankingMetrics
 
@@ -30,22 +31,7 @@ def load_predictions(path, *, allow_excluded=False):
 
 
 def load_masks(folder, users, items):
-    user_index, item_index = pd.Index(users), pd.Index(items)
-    masks = {}
-    for name in ("train", "valid", "test"):
-        frame = pd.read_csv(folder / f"{name}.tsv", sep="\t", dtype=str)
-        if frame.shape[1] < 2 or frame.empty:
-            raise ValueError(f"Empty or malformed {name} split")
-        u = user_index.get_indexer(frame.iloc[:, 0])
-        i = item_index.get_indexer(frame.iloc[:, 1])
-        if (u < 0).any() or (i < 0).any():
-            raise ValueError(f"Unmapped user/item IDs in {name}")
-        mask = np.zeros((len(users), len(items)), dtype=bool)
-        mask[u, i] = True
-        if any(np.any(mask & previous) for previous in masks.values()):
-            raise ValueError(f"Overlapping interactions in {name} split")
-        masks[name] = mask
-    return masks
+    return split(users, items, Path(folder).parent)
 
 
 def load_item_features(path, items):
@@ -61,7 +47,12 @@ def load_item_features(path, items):
     return [features_by_id[item] for item in items]
 
 
-def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
+def run(
+    results,
+    output,
+    k=10,
+    items_path=Path("data/ml-100k/ml-100k.item"),
+):
     if k < 1:
         raise ValueError("k must be positive")
     rows, diagnostics, hashes = [], {}, {}
@@ -83,7 +74,12 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
             raise ValueError(f"User/item ID order differs for {name}")
         values = RankingMetrics.calculate_all_metrics(scores, hidden, masks["test"], k)
         values.update(BeyondAccuracyMetrics.calculate_all_metrics(scores, hidden, masks["test"], distance_matrix, k))
-        rows.append({"model": name, **{f"{m}@{k}": values[f"{m}@{k}"] for m in METRICS}})
+        rows.append(
+            {
+                "model": name,
+                **{f"{m}@{k}": values[f"{m}@{k}"] for m in METRICS},
+            }
+        )
         hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
         if name in ("Random", "Pop"):
             distinct = len(np.unique(scores, axis=0))
@@ -98,11 +94,12 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         path = results / "split" / f"{name}.tsv"
         hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     hashes[str(items_path)] = hashlib.sha256(items_path.read_bytes()).hexdigest()
-    metric_path = Path(__file__).resolve().parents[1] / "source/metrics/ranking_metrics.py"
+    repo_root = Path(__file__).resolve().parents[2]
+    metric_path = repo_root / "source/metrics/ranking_metrics.py"
     hashes["source/metrics/ranking_metrics.py"] = hashlib.sha256(metric_path.read_bytes()).hexdigest()
-    beyond_path = Path(__file__).resolve().parents[1] / "source/metrics/beyond_accuracy.py"
+    beyond_path = repo_root / "source/metrics/beyond_accuracy.py"
     hashes["source/metrics/beyond_accuracy.py"] = hashlib.sha256(beyond_path.read_bytes()).hexdigest()
-    hashes["scripts/compare_individuals.py"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    hashes["scripts/task22/compare_individuals.py"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     summary = pd.DataFrame(rows)
     protocol = {
         "experiment": "Task 2.2 experiment 1: tuned individual models",
@@ -113,7 +110,8 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
         "catalog_size": len(items),
         "split_interactions": {name: int(mask.sum()) for name, mask in masks.items()},
         "selection": "All nine fixed Task 1 tuned individuals plus Random and Pop; no test-based selection or retraining",
-        "relevance": "Binary test interaction, irrespective of rating value",
+        "relevance": "Binary test interaction, irrespective of rating value, for ranking metrics",
+        "score_scale": "Implicit-feedback ranking scores are uncalibrated; MAE/MSE/RMSE are excluded.",
         "hidden": ["train", "valid"],
         "ties": "Stable exported item-column order",
         "aggregation": "Macro mean over users with at least one test interaction",
@@ -133,10 +131,10 @@ def run(results, output, k=10, items_path=Path("data/ml-100k/ml-100k.item")):
     report = (
         f"# Task 2.2 — Experiment 1\n\n"
         f"Evaluated {len(rows)} fixed individual-model exports on {int(eligible.sum())} users at K={k}. "
-        "Train and validation interactions are excluded. Accuracy and beyond-accuracy metrics use the Task 2.1 implementations. "
+        "Train and validation interactions are excluded. Ranking and beyond-accuracy metrics use the Task 2.1 implementations. "
         "No models were trained or selected using test results.\n\n"
         + "\n".join(table)
-        + "\n\nResults describe one saved split; numerical differences do not establish statistical significance.\n"
+        + "\n\nRating errors are excluded because exported scores are uncalibrated ranking scores. Results describe one saved split; numerical differences do not establish statistical significance.\n"
         + "\n".join(f"\nWarning: {warning}\n" for warning in warnings)
     )
     output.mkdir(parents=True, exist_ok=True)

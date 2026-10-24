@@ -1266,7 +1266,7 @@ tune = [
 [[package]]
 name = "recbole"
 version = "1.2.1"
-source = { git = "https://github.com/masoudmansoury/RecBole_DSAIT4335.git?rev=439c5a899296cbaad9842751dd4355393f22d679#439c5a899296cbaad9842751dd4355393f22d679" }
+source = { git = "https://github.com/masoudmansoury/RecBole_DSAIT4335.git?rev=7aa0ec90ebf51346a0b81dee9198a8279cadccf2#7aa0ec90ebf51346a0b81dee9198a8279cadccf2" }
 dependencies = [
     { name = "colorama" },
     { name = "colorlog" },
@@ -1318,7 +1318,7 @@ requires-dist = [
     { name = "pandas", specifier = "<3" },
     { name = "ray", extras = ["tune"], marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'", specifier = ">=2.58.0" },
     { name = "ray", extras = ["tune"], marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "==2.40.0" },
-    { name = "recbole", git = "https://github.com/masoudmansoury/RecBole_DSAIT4335.git?rev=439c5a899296cbaad9842751dd4355393f22d679" },
+    { name = "recbole", git = "https://github.com/masoudmansoury/RecBole_DSAIT4335.git?rev=7aa0ec90ebf51346a0b81dee9198a8279cadccf2" },
     { name = "setuptools", specifier = "<81" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "<2.3" },
 ]
