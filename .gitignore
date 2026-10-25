@@ -7,26 +7,26 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# recbole
+# RecBole generated outputs
 log/
 saved/
 log_tensorboard/
 
-# generated
+# Generated data and experiment artifacts
 data/*
 !data/ml-100k/
 results/*
 !results/.gitkeep
 /figures
+seeds-task2/
+split.tar
+tuned_predictions.tar.gz
+scripts/slurm
+parameters/delftblue_gpu.yaml
 
-# latex
+# LaTeX build artifacts
 report/*.aux
 report/*.out
 report/*.fls
 report/*.synctex.gz
 report/*.fdb_latexmk
-
-
-#Task2.2
-tests/*
-
