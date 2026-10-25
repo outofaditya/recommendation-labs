@@ -17,6 +17,7 @@ data/*
 !data/ml-100k/
 results/*
 !results/.gitkeep
+/figures
 seeds-task2/
 split.tar
 tuned_predictions.tar.gz
