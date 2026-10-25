@@ -17,6 +17,7 @@ data/*
 !data/ml-100k/
 results/*
 !results/.gitkeep
+/figures
 
 # latex
 report/*.aux
